@@ -1,14 +1,15 @@
+from typing import Union
+
 import hydra
 import wandb
 from omegaconf import DictConfig
 
+import util
 from train import Train
 
 
-@hydra.main(config_path="conf", config_name="config")
-def main(cfg: DictConfig) -> None:
-    for i in range(cfg.repeat):
-        run = wandb.init(
+def createWandbRun(cfg: DictConfig):
+    return wandb.init(
             project=cfg.project,
             entity=cfg.wandb_entity,
             reinit=True,
@@ -27,8 +28,17 @@ def main(cfg: DictConfig) -> None:
             }
         )
 
-        train = Train(cfg)
-        train.start()
+
+@hydra.main(config_path="conf", config_name="config")
+def main(cfg: DictConfig) -> None:
+    for i in range(cfg.repeat):
+        run = createWandbRun(cfg)
+        log = util.logger(cfg)
+
+        util.create_project_dir(cfg, log)
+
+        program = Train(cfg, log)
+        program.start()
 
         run.finish()
 

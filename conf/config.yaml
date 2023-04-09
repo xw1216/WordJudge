@@ -9,3 +9,5 @@ project: 'WordJudge'
 wandb_entity: outspace
 
 cuda: True
+seed: 123
+self_effect_val: 10.0

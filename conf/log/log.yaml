@@ -1,6 +1,9 @@
+# Log Configs for System Logging and Wandb
+
 log_path: './log/sys'
-log_name: 'record.log'
 wandb_path: './log/wandb'
+
+log_name: 'record.log'
 
 dir_format: '%m-%d-%H-%M-%S'
 time_format: '%H-%M-%S'

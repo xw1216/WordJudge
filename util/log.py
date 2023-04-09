@@ -41,7 +41,7 @@ def init_logger(cfg: DictConfig, path: pathlib.Path) -> logging.Logger:
 
 def logger(cfg: DictConfig) -> logging.Logger:
     time_str = datetime.now().strftime(cfg.log.dir_format)
-    path_log = pathlib.Path(cfg.train.log_path, time_str)
+    path_log = pathlib.Path(cfg.log.log_path, time_str)
     path_log.mkdir(exist_ok=True, parents=True)
 
     log = init_logger(cfg, path_log)
