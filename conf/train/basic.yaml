@@ -1,0 +1,13 @@
+# Overall Training Parameters
+
+batch_size: 8
+epochs: 100
+
+repeat: 5
+fold: 6
+
+load_model: False
+save_model: True
+save_path: './save/'
+
+data_path: './data/'

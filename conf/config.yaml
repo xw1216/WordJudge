@@ -1,0 +1,11 @@
+# Default Configuration File Used By Hydra
+
+defaults:
+  - model: BrainGNN
+  - train: basic
+  - log: log
+
+project: 'WordJudge'
+wandb_entity: outspace
+
+cuda: True
