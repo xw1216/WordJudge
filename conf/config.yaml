@@ -1,13 +1,16 @@
 # Default Configuration File Used By Hydra
 
 defaults:
-  - model: BrainGNN
   - train: basic
+  - dataset: word_judge
+  - model: BrainGNN
   - log: log
 
 project: 'WordJudge'
-wandb_entity: outspace
+wandb_entity: 'outspace'
+
+override_data: False
 
 cuda: True
 seed: 123
-self_effect_val: 10.0
+

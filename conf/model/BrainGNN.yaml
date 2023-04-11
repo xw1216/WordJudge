@@ -7,7 +7,7 @@ momentum: 0.1
 weight_decay: 5e-3
 
 n_layer: 2
-n_roi: 360
+
 pool_ratio: 0.5
 eps: 1e-10
 

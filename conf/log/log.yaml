@@ -3,9 +3,10 @@
 log_path: './log/sys'
 wandb_path: './log/wandb'
 
-log_name: 'record.log'
+log_file_name: 'record.log'
+logger_name: 'WordJudge'
 
-dir_format: '%m-%d-%H-%M-%S'
+dir_format: '%m-%d_%H-%M-%S'
 time_format: '%H-%M-%S'
 log_format: '[%(asctime)s][%(filename)s][%(levelname)s] - %(message)s'
 

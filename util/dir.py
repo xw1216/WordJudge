@@ -1,11 +1,11 @@
 import logging
-import os
 import pathlib
 
 from omegaconf import DictConfig
 
 
-def create_project_dir(cfg: DictConfig, log: logging.Logger) -> None:
+def create_project_dir(cfg: DictConfig) -> None:
+    log = cfg.logger
     pack_list = ['log', 'train']
     dir_list = [
         ['log_path', 'wandb_path'],

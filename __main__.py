@@ -31,14 +31,14 @@ def createWandbRun(cfg: DictConfig):
 
 @hydra.main(config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
-    for i in range(cfg.repeat):
+    for i in range(cfg.train.repeat):
         run = createWandbRun(cfg)
-        log = util.logger(cfg)
+        util.append_logger(cfg)
 
-        util.create_project_dir(cfg, log)
+        util.create_project_dir(cfg)
 
-        program = Train(cfg, log)
-        program.start()
+        program = Train(cfg)
+        program.run()
 
         run.finish()
 

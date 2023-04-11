@@ -2,7 +2,7 @@ import logging
 import pathlib
 from datetime import datetime
 
-from omegaconf import DictConfig
+from omegaconf import DictConfig, open_dict
 
 
 def init_formatter(cfg: DictConfig) -> logging.Formatter:
@@ -18,8 +18,8 @@ def clear_handler(log: logging.Logger):
     log.handlers.clear()
 
 
-def init_logger(cfg: DictConfig, path: pathlib.Path) -> logging.Logger:
-    log = logging.getLogger('WordJudge')
+def init_logger(cfg: DictConfig, path: pathlib.Path, name: str) -> logging.Logger:
+    log = logging.getLogger(name)
     log.setLevel(logging.INFO)
     clear_handler(log)
 
@@ -30,7 +30,7 @@ def init_logger(cfg: DictConfig, path: pathlib.Path) -> logging.Logger:
     log.addHandler(stream_handler)
 
     file_handler = logging.FileHandler(
-        str(pathlib.Path(path, cfg.log.log_name)),
+        str(pathlib.Path(path, cfg.log.log_file_name)),
         encoding='utf-8'
     )
     file_handler.setFormatter(formatter)
@@ -39,10 +39,13 @@ def init_logger(cfg: DictConfig, path: pathlib.Path) -> logging.Logger:
     return log
 
 
-def logger(cfg: DictConfig) -> logging.Logger:
+def append_logger(cfg: DictConfig) -> logging.Logger:
     time_str = datetime.now().strftime(cfg.log.dir_format)
     path_log = pathlib.Path(cfg.log.log_path, time_str)
     path_log.mkdir(exist_ok=True, parents=True)
 
-    log = init_logger(cfg, path_log)
+    log = init_logger(cfg, path_log, cfg.log.logger_name)
+    with open_dict(cfg):
+        cfg.logger = log
+
     return log

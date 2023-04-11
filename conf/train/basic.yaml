@@ -1,17 +1,14 @@
 # Overall Training Parameters
 
-label_type: 'class'   # class | field | truth | property
-node_type: 'wRRC'      # pearson | partial | wRRC | gPPI
-edge_type: 'gPPI'     # pearson | partial | wRRC | gPPI
-
 batch_size: 8
 epochs: 100
 
 repeat: 5
-fold: 6
+fold: 10
 
 load_model: False
 save_model: True
-save_path: './save/'
 
+save_path: './save/'
 data_path: './data/'
+syn_file_name: 'graph.pt'
