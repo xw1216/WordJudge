@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 
 from omegaconf import DictConfig
-from torch_geometric.data import Data, InMemoryDataset
+from torch_geometric.data import InMemoryDataset
 
 from .graph import GraphBuilder
 
@@ -46,7 +46,7 @@ class ConnDataset(InMemoryDataset):
             pd.read_csv(
                 str(Path(self.path_data, self.label_file_name))
             ).loc[:, self.name_label_type]
-        return np.array(series.tolist())
+        return np.array(series.tolist(), dtype=torch.int)
 
     def transform_edge_matrix(self, edges: np.ndarray):
         # TODO dynamic change the val offset
@@ -88,13 +88,13 @@ class ConnDataset(InMemoryDataset):
 
 
 class KFoldGroup:
-    def __init__(self, dataset: ConnDataset, fold: int, seed: int, shuffle: bool = True):
+    def __init__(self, dataset: ConnDataset, log: logging.Logger, fold: int, seed: int, shuffle: bool = True):
         self.n_sample = len(dataset)
         self.fold = fold
         self.shuffle = shuffle
         self.seed = seed
         self.dataset = dataset
-        self.__log = logging.getLogger('WordJudge')
+        self.log = log
 
         self.__check_index()
 
@@ -102,7 +102,7 @@ class KFoldGroup:
         if self.fold <= 2 \
                 or self.fold > self.n_sample \
                 or int(self.n_sample % self.fold) != 0:
-            self.__log.error(f'Incorrect k fold config: {self.n_sample} divided by {self.fold}')
+            self.log.error(f'Incorrect k fold config: {self.n_sample} divided by {self.fold}')
             raise RuntimeError
 
     def __create_mask(self, ids: np.ndarray, start: int, stop: int):
@@ -119,7 +119,7 @@ class KFoldGroup:
         fold_sizes = np.full(self.fold, self.n_sample // self.fold, dtype=int)
         fold_sizes[: self.n_sample % self.fold] += 1
 
-        valid_mask = self.__create_mask(ids, self.n_sample - fold_sizes[-1], self.n_sample)
+        test_mask = self.__create_mask(ids, self.n_sample - fold_sizes[-1], self.n_sample)
 
         cur = 0
         for i in fold_sizes:
@@ -128,19 +128,23 @@ class KFoldGroup:
                 break
 
             start, stop = cur, cur + fold_sizes[i]
-            test_mask = self.__create_mask(ids, start, stop)
-            train_mask = np.logical_not(np.logical_or(test_mask, valid_mask))
+            valid_mask = self.__create_mask(ids, start, stop)
+            train_mask = np.logical_not(np.logical_or(valid_mask, test_mask))
 
-            yield train_mask, test_mask, valid_mask
+            yield train_mask, valid_mask, test_mask
             cur = stop
 
     def split(self):
-        index = np.arange(self.n_sample)
-        for train_mask, test_mask, valid_mask in self.__group_test_mask():
-            train_index = index[train_mask]
-            test_index = index[test_mask]
+        index = np.arange(0, self.n_sample)
+        for train_mask, valid_mask, test_mask in self.__group_test_mask():
+            train_index: np.ndarray = index[train_mask]
             valid_index = index[valid_mask]
+            test_index = index[test_mask]
+
+            self.log.info(f'Train set index array: {train_index.tolist()}')
+            self.log.info(f'Validate set index array: {valid_index.tolist()}')
+            self.log.info(f'Test set index array: {test_index.tolist()}')
 
             yield self.dataset[train_index], \
-                self.dataset[test_index], \
-                self.dataset[valid_index]
+                self.dataset[valid_index], \
+                self.dataset[test_index]

@@ -12,8 +12,8 @@ from torch_geometric.data import Data
 
 class CooTensor:
     def __init__(self, index: np.ndarray, value: np.ndarray):
-        self.index = torch.from_numpy(index).long()
-        self.value = torch.from_numpy(value)
+        self.index: torch.LongTensor = torch.from_numpy(index).long()
+        self.value: torch.Tensor = torch.from_numpy(value)
 
     def to_tuple(self) -> tuple[torch.Tensor, torch.Tensor]:
         return self.index, self.value
@@ -52,8 +52,8 @@ class GraphBuilder:
     def do(self, nodes: np.ndarray, edges: np.ndarray, labels: np.ndarray) -> tuple[Data, dict]:
         self.check_consist(nodes, edges, labels)
 
-        self.num_graph = len(labels)
-        self.num_node = nodes.shape[1]
+        self.num_graph: int = len(labels)
+        self.num_node: int = nodes.shape[1]
 
         # create 3D node tensor and concat 2D row-wise
         # shape = [num_node * num_sample, num_node], type = float32
@@ -76,7 +76,7 @@ class GraphBuilder:
 
         # batch indicator row vector
         # shape = [num_node * num_sample], type = int64
-        batch_tensor = torch.Tensor()
+        batch_tensor = torch.LongTensor()
 
         for i in range(self.num_graph):
             self.log.info(f'Building subject graph for {i}/{self.num_graph}')
@@ -85,7 +85,7 @@ class GraphBuilder:
             torch.cat((edge_index_tensor, edge_sparse_tensor.index), dim=1)
             torch.cat((edge_tensor, edge_sparse_tensor.value), dim=0)
 
-            torch.cat((batch_tensor, torch.tile(torch.Tensor(i).long(), self.num_node)))
+            torch.cat((batch_tensor, torch.tile(torch.Tensor([i]).long(), (self.num_node,))))
 
         edge_tensor = torch.transpose(edge_tensor, 0, 1)
 
@@ -99,6 +99,8 @@ class GraphBuilder:
             y=labels_tensor,
             pos=pseudo_tensor
         )
+
+        data.validate(raise_on_error=True)
 
         slices = {
             'x': node_slice,
@@ -145,12 +147,12 @@ class GraphBuilder:
     def align_slice(cls, edge_index_tensor: torch.Tensor, batch_tensor: torch.Tensor) -> list[torch.Tensor]:
         node_cnt = torch.bincount(batch_tensor)
         node_slice = torch.cumsum(node_cnt, dim=0)
-        node_slice = torch.cat((torch.Tensor(0).long(), node_slice))
+        node_slice = torch.cat((torch.Tensor([0]).long(), node_slice))
 
         row_tensor = edge_index_tensor[0, :]
         edge_cnt = torch.bincount(batch_tensor[row_tensor])
         edge_slice = torch.cumsum(edge_cnt, dim=0)
-        edge_slice = torch.cat((torch.Tensor([0]).long(), node_slice))
+        edge_slice = torch.cat((torch.Tensor([0]).long(), edge_slice))
 
         # use broadcast to align edge index for every graph back in range(0, num_node)
         edge_start_index_tensor = node_slice[batch_tensor[row_tensor]]

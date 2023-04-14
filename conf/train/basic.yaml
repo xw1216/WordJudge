@@ -12,3 +12,6 @@ save_model: True
 save_path: './save/'
 data_path: './data/'
 syn_file_name: 'graph.pt'
+
+optim: 'Adam' # Adam, SGD, AdamW
+sched: 'Step' # Step, Exp, CosAnneal, Reduce, OneCycle

@@ -8,6 +8,7 @@ label_file_name: 'labels.csv'
 
 sample: 180
 n_roi: 360
+n_class: 6
 
 fill_val: 10.0
 ppi_offset: 10.0
