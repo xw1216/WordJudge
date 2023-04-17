@@ -15,28 +15,27 @@ from .graph import GraphBuilder
 
 class ConnDataset(InMemoryDataset):
     def __init__(self, cfg: DictConfig) -> None:
-        self.path_data: Path = Path(cfg.train.data_path)
+        self.path_data: Path = Path(cfg.dataset.data_path)
         self.path_save: Path = Path(cfg.train.save_path)
 
         self.name_node_feat: str = cfg.dataset.node_type
         self.name_edge_feat: str = cfg.dataset.edge_type
         self.name_label_type: str = cfg.dataset.label_type
 
-        self.label_file_name: str = cfg.dataset.label_file_name
-        self.syn_file_name: str = cfg.train.syn_file_name
+        self.name_label_file: str = cfg.dataset.label_file_name
+        self.name_syn_file: str = cfg.train.syn_file_name
 
-        self.fill_val = cfg.dataset.fill_val
-        self.offset = cfg.dataset.ppi_offset
+        self.val_node_fill = cfg.dataset.node_mat_fill_val
+        self.val_edge_offset = cfg.dataset.edge_mat_offset
         self.log: logging.Logger = cfg.logger
-        self.override_data(cfg.override_data)
+        self.override_data(cfg.dataset.override_data)
 
         # will invoke process if processed file do not exist
         super().__init__(root=str(self.path_save))
         self.data, self.slices = torch.load(self.processed_paths[0])
-        self.data.x = self.transform_node_matrix(self.data.x)
 
     def override_data(self, can_override: bool) -> None:
-        path_syn = Path(self.path_save, 'processed', self.syn_file_name)
+        path_syn = Path(self.path_save, 'processed', self.name_syn_file)
         if can_override and path_syn.exists():
             self.log.warning(f'Removing existed synthesized graph data {path_syn}')
             os.remove(path_syn)
@@ -44,19 +43,19 @@ class ConnDataset(InMemoryDataset):
     def load_label(self) -> np.ndarray:
         series: pd.Series = \
             pd.read_csv(
-                str(Path(self.path_data, self.label_file_name))
+                str(Path(self.path_data, self.name_label_file))
             ).loc[:, self.name_label_type]
-        return np.array(series.tolist(), dtype=torch.int)
+        return np.array(series.tolist(), dtype=np.int)
 
     def transform_edge_matrix(self, edges: np.ndarray):
-        # TODO dynamic change the val offset
-        if self.name_edge_feat == 'gPPI':
-            edges += self.offset
+        edges_temp = edges.copy()
+        edges_temp = np.nan_to_num(edges_temp, False, 1e10)
+        offset = np.abs(edges_temp.min(initial=None)) + 1
+        self.val_edge_offset = offset
+        return edges + offset
 
-    def transform_node_matrix(self, nodes: torch.Tensor):
-        t = torch.where(torch.isnan(nodes), torch.full_like(nodes, self.fill_val), nodes)
-        t = torch.where(torch.isinf(t), torch.full_like(t, self.fill_val), t)
-        return t
+    def transform_node_matrix(self, nodes: np.ndarray):
+        return np.nan_to_num(nodes, copy=True, nan=self.val_node_fill)
 
     @property
     def raw_file_names(self) -> Union[str, List[str], Tuple]:
@@ -64,7 +63,7 @@ class ConnDataset(InMemoryDataset):
 
     @property
     def processed_file_names(self) -> Union[str, List[str], Tuple]:
-        return self.syn_file_name
+        return self.name_syn_file
 
     def download(self):
         pass
@@ -79,9 +78,10 @@ class ConnDataset(InMemoryDataset):
         edges: np.ndarray = np.load(str(Path(self.path_data, data_files[1])))
         labels: np.ndarray = self.load_label()
 
-        self.transform_edge_matrix(edges)
+        nodes = self.transform_node_matrix(nodes)
+        edges = self.transform_edge_matrix(edges)
 
-        builder = GraphBuilder(self.fill_val, self.log)
+        builder = GraphBuilder(self.log)
         self.data, self.slices = builder.do(nodes, edges, labels)
 
         torch.save((self.data, self.slices), self.processed_paths[0])
@@ -89,12 +89,12 @@ class ConnDataset(InMemoryDataset):
 
 class KFoldGroup:
     def __init__(self, dataset: ConnDataset, log: logging.Logger, fold: int, seed: int, shuffle: bool = True):
-        self.n_sample = len(dataset)
-        self.fold = fold
-        self.shuffle = shuffle
-        self.seed = seed
         self.dataset = dataset
         self.log = log
+        self.fold = fold
+        self.seed = seed
+        self.shuffle = shuffle
+        self.n_sample = len(dataset)
 
         self.__check_index()
 

@@ -1,6 +1,5 @@
 from typing import Iterator
 
-import torch
 from torch.optim import Adam, SGD, AdamW
 from torch.nn.parameter import Parameter
 
@@ -22,4 +21,3 @@ def build_optimizer(
         )
     else:
         return AdamW(params=param, lr=lr, weight_decay=weight_decay)
-

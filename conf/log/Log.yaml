@@ -1,12 +1,11 @@
 # Log Configs for System Logging and Wandb
 
 log_path: './log/sys'
-wandb_path: './log/wandb'
+log_file: 'record.log'
+log_name: 'WordJudge'
 
-log_file_name: 'record.log'
-logger_name: 'WordJudge'
-
-dir_format: '%m-%d_%H-%M-%S'
 time_format: '%H-%M-%S'
+dir_format: '%m-%d_%H-%M-%S'
 log_format: '[%(asctime)s][%(filename)s][%(levelname)s] - %(message)s'
 
+wandb_path: './log/wandb'

@@ -20,11 +20,10 @@ class CooTensor:
 
 
 class GraphBuilder:
-    def __init__(self, fill_val: int, log: logging.Logger):
+    def __init__(self, log: logging.Logger):
         self.num_graph = 0
         self.num_node = 0
         self.log = log
-        self.fill_val = fill_val
 
     def check_consist(self, nodes: np.ndarray, edges: np.ndarray, labels: np.ndarray):
         if not (
@@ -69,9 +68,9 @@ class GraphBuilder:
         pseudo_tensor = torch.tile(torch.eye(self.num_node), (self.num_graph, 1))
 
         # cat remaining sparse element index & weight horizontally
-        # shape = [2, num_remain_node], type = int64
-        edge_index_tensor = torch.Tensor()
-        # shape = [num_remain_node, 1], type = float32
+        # shape = [2, num_remain_edge], type = int64
+        edge_index_tensor = torch.LongTensor()
+        # shape = [num_remain_edge, 1], type = float32
         edge_tensor = torch.Tensor()
 
         # batch indicator row vector

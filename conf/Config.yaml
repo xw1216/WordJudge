@@ -1,0 +1,14 @@
+# Default Configuration File Used By Hydra
+
+defaults:
+  - _self_
+  - dataset: WordJudge
+  - model: BrainGNN
+  - train: Train
+  - log: Log
+
+project: 'WordJudge'
+entity: 'outspace'
+group: 'initial'
+
+cuda: True

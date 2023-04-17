@@ -3,6 +3,17 @@ import torch
 from torch import Tensor
 
 
+class LossSelector:
+    def __init__(self):
+        self.loss_all: Tensor = torch.Tensor()
+        self.loss_ce: Tensor = torch.Tensor()
+        self.loss_unit1: Tensor = torch.Tensor()
+        self.loss_unit2: Tensor = torch.Tensor()
+        self.loss_top1: Tensor = torch.Tensor()
+        self.loss_top2: Tensor = torch.Tensor()
+        self.loss_consist: Tensor = torch.Tensor()
+
+
 def top_k_loss(score: Tensor, pool_ratio: float, eps: float = 1e-10) -> Tensor:
     if pool_ratio > 0.5:
         pool_ratio = 1 - pool_ratio
@@ -33,7 +44,7 @@ def consist_loss(score: Tensor, labels: Tensor, n_class: int, device: torch.devi
     return loss * 2
 
 
-def unit_loss(weight: Tensor) -> float:
+def unit_loss(weight: Tensor) -> Tensor:
     return (torch.norm(weight, p=2) - 1) ** 2
 
 

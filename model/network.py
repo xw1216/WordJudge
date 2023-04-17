@@ -1,11 +1,8 @@
 import torch
 
 import torch.nn as nn
-from torch import Tensor
 import torch_geometric as pyg
 import torch_sparse as sparse
-import torch_geometric.nn as gnn
-from torch_geometric.data import Data
 
 from .conv import GConv
 from .pool import TopKPool, PoolSelector
@@ -76,7 +73,7 @@ class BrainGNN(torch.nn.Module):
             nn.LogSoftmax(dim=-1)
         )
 
-    def forward(self, data: Data):
+    def forward(self, data):
         h1 = self.conv1(data.x, data.edge_index, data.edge_attr, data.pos)
         res1: PoolSelector = self.pool1(h1, data.edge_index, data.edge_attr, data.batch, data.pos)
 
@@ -112,5 +109,3 @@ class BrainGNN(torch.nn.Module):
         )
         edge_index, edge_weight = pyg.utils.remove_self_loops(edge_index, edge_weight)
         return edge_index, edge_weight
-
-

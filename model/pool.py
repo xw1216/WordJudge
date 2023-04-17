@@ -48,7 +48,7 @@ class TopKPool(gnn.TopKPooling):
 
         # s after L2 norm
         score = (attn * self.weight).sum(dim=-1)
-        score_norm = score / self.weight.norm(p=2, dim=-1)
+        score = score / self.weight.norm(p=2, dim=-1)
 
         # s after normal distribution transform
         score = (score - torch.mean(score, dim=0, keepdim=False)) / torch.var(score, dim=0, keepdim=False)

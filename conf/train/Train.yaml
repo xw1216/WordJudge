@@ -1,16 +1,16 @@
 # Overall Training Parameters
 
+seed: 123
+
 batch_size: 8
 epochs: 100
 
-repeat: 5
-fold: 10
+folds: 10
 
 load_model: False
 save_model: True
 
 save_path: './save/'
-data_path: './data/'
 syn_file_name: 'graph.pt'
 
 optim: 'Adam' # Adam, SGD, AdamW

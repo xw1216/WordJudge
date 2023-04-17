@@ -17,6 +17,6 @@ def build_scheduler(
     elif name == 'Reduce':
         return sched.ReduceLROnPlateau(optim, mode='min', factor=gamma)
     else:
-        return sched.OneCycleLR(optim, max_lr=lr, epochs=epoch, steps_per_epoch=1)
+        return sched.OneCycleLR(optim, max_lr=lr, epochs=epoch, steps_per_epoch=step_size)
 
 

@@ -6,10 +6,11 @@ from omegaconf import DictConfig
 
 def create_project_dir(cfg: DictConfig) -> None:
     log = cfg.logger
-    pack_list = ['log', 'train']
+    pack_list = ['log', 'train', 'dataset']
     dir_list = [
         ['log_path', 'wandb_path'],
-        ['save_path', 'data_path']
+        ['save_path'],
+        ['data_path']
     ]
 
     for i in range(len(pack_list)):

@@ -13,7 +13,6 @@ from .timer import Timer
 def load_mat(mat_path: str) -> np.ndarray:
     z_mat = sio.loadmat(mat_path)['Z']
     np_arr = np.array(z_mat)
-    # np.nan_to_num(np_arr, False, fill_val)
     return np_arr
 
 
@@ -54,10 +53,10 @@ def load_split_npy(path: Path, file_list: list[str]) -> np.ndarray:
     return data
 
 
-def concat_npy(conn_path: Path, conn_type: str,
+def concat_npy(data_path: Path, conn_type: str,
                sample_num: int, roi_num: int,
                override: bool, log: logging.Logger):
-    npy_path = Path(conn_path, f'{conn_type}.npy')
+    npy_path = Path(data_path, f'{conn_type}.npy')
     if os.path.exists(npy_path):
         if override:
             log.warning('Removing existed concat {conn_type} data')
@@ -65,7 +64,7 @@ def concat_npy(conn_path: Path, conn_type: str,
         else:
             log.info(f'File {npy_path} detected, skip concat')
             return
-
+    conn_path = Path(data_path, conn_type)
     file_list = os.listdir(conn_path)
     file_list.sort()
 
@@ -73,30 +72,32 @@ def concat_npy(conn_path: Path, conn_type: str,
         log.error(f'Unmatch sample number detected.')
         raise RuntimeError
 
-    data = load_split_npy(conn_path, file_list)\
-        .reshape((sample_num, roi_num, roi_num))
+    data = load_split_npy(conn_path, file_list).reshape((sample_num, roi_num, roi_num))
     np.save(str(npy_path), data)
     log.info(f'Saving synthesized {conn_type} data to {npy_path}')
 
 
 def mat2ny(cfg: DictConfig):
-    data_path = Path(cfg.train.path_data)
-    node_path = Path(data_path, cfg.dataset.node_type)
-    edge_path = Path(data_path, cfg.dataset.edge_type)
+    node_type = cfg.dataset.node_type
+    edge_type = cfg.dataset.edge_type
+
+    data_path = Path(cfg.dataset.data_path)
+    node_path = Path(data_path, node_type)
+    edge_path = Path(data_path, edge_type)
 
     timer = Timer()
     log: logging.Logger = cfg.logger
     sample_num = cfg.dataset.sample
     roi_num = cfg.dataset.n_roi
-    can_override = cfg.override_data
+    can_override = cfg.dataset.override_data
 
     timer.start()
     convert_mat_in_path(node_path, log)
     convert_mat_in_path(edge_path, log)
 
-    concat_npy(node_path, cfg.dataset.node_type,
+    concat_npy(node_path, node_type,
                sample_num, roi_num, can_override, log)
-    concat_npy(edge_path, cfg.dataset.edge_type,
+    concat_npy(edge_path, edge_type,
                sample_num, roi_num, can_override, log)
     timer.end()
 
