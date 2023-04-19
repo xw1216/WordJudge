@@ -1,5 +1,4 @@
 data
 log
-.idea/*
-save/*
-save/processed
+.idea
+save/
