@@ -1,8 +1,12 @@
+from typing import Optional
+
 import torch
-import torch_geometric as pyg
 
 from torch import nn, Tensor
+import torch_geometric as pyg
 from torch_geometric import nn as gnn
+from torch_geometric.utils import scatter
+from torch_geometric.utils.num_nodes import maybe_num_nodes
 
 from .param_init import uniform
 
@@ -42,7 +46,6 @@ class GConv(gnn.MessagePassing):
         self.reset_parameters()
 
     def reset_parameters(self):
-        # TODO confirm fan_in parameter
         uniform(self.in_channel, self.bias)
 
     def forward(self, x: Tensor, edge_index: Tensor, edge_weight: Tensor, pos: Tensor) -> Tensor:
@@ -64,6 +67,16 @@ class GConv(gnn.MessagePassing):
             edge_weight=edge_weight
         )
 
+    @classmethod
+    def group_norm(
+            cls, src: Tensor, index: Optional[Tensor] = None,
+            num_nodes: Optional[int] = None, dim: int = 0
+    ):
+        dim_size = maybe_num_nodes(index, num_nodes)
+        src_sum = scatter(src.detach(), index, dim, dim_size=dim_size, reduce='sum').index_select(dim, index)
+
+        return src / src_sum
+
     # noinspection PyMethodOverriding
     def message(
             self, edge_index_i: Tensor, edge_weight: Tensor,
@@ -71,8 +84,16 @@ class GConv(gnn.MessagePassing):
     ) -> Tensor:
         # send message from neighbor node j that belongs to Neighbor(i) to central node i
 
-        # e_ij = e_ij / sum_{j in Neighbor(i)}(e_ij)
+        # edge weight normalize
         # shape = (edge_num, 1)
+        # 1. e_ij = e_ij / sum_{j in Neighbor(i)}(e_ij)
+        # edge_weight_group_norm = self.group_norm(
+        #     src=edge_weight,
+        #     index=edge_index_i,
+        #     num_nodes=size_i
+        # ).view(-1, 1)
+
+        # 2. e_ij = group_softmax(E)
         edge_weight_group_norm = pyg.utils.softmax(
             src=edge_weight,
             index=edge_index_i,
@@ -88,12 +109,13 @@ class GConv(gnn.MessagePassing):
     def update(self, inputs: Tensor, x: Tensor) -> Tensor:
         # input, x shape = (num_node, out_channel)
         x_new = inputs + x
+        x_new = self.conv_activate(x_new)
         if self.bias is not None:
             x_new += self.bias
         if self.is_out_norm:
             # L2 normalization in feature wise
             x_new = nn.functional.normalize(x_new, p=2, dim=-1)
-        return self.conv_activate(x_new)
+        return x_new
 
     def __repr__(self) -> str:
         return (f'{self.__class__.__name__}(in_dim={self.in_channel}, out_dim={self.out_channel}, '

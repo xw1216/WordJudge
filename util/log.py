@@ -1,9 +1,8 @@
-import sys
 import logging
 from datetime import datetime
 from pathlib import Path
 
-from omegaconf import DictConfig, open_dict
+from omegaconf import DictConfig
 
 
 def init_formatter(log_format: str, time_format: str) -> logging.Formatter:

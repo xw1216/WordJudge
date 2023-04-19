@@ -18,12 +18,12 @@ class BrainGNN(torch.nn.Module):
 
         self.num_cluster = num_cluster
         self.num_roi = dim_in
-
         self.pool_ratio = pool_ratio
+        self.drop_ratio = drop_ratio
 
         self.dim_in = dim_in
-        self.dim1 = 32
-        self.dim2 = 32
+        self.dim1 = 36
+        self.dim2 = 36
         self.dim3 = 256
         self.dim_out = num_class
 
@@ -36,7 +36,7 @@ class BrainGNN(torch.nn.Module):
         self.pool1 = TopKPool(
             in_channels=self.dim1,
             ratio=self.pool_ratio,
-            multiplier=2,
+            multiplier=1,
             nonlinearity=nn.Sigmoid()
         )
         self.conv2 = GConv(
@@ -48,7 +48,7 @@ class BrainGNN(torch.nn.Module):
         self.pool2 = TopKPool(
             in_channels=self.dim2,
             ratio=self.pool_ratio,
-            multiplier=2,
+            multiplier=1,
             nonlinearity=nn.Sigmoid()
         )
 
@@ -58,14 +58,14 @@ class BrainGNN(torch.nn.Module):
             nn.Linear((self.dim1 + self.dim2) * 2, self.dim2, bias=True),
             nn.LeakyReLU(),
             nn.BatchNorm1d(self.dim2),
-            nn.Dropout(p=drop_ratio)
+            nn.Dropout(p=self.drop_ratio)
         )
 
         self.mlp2 = nn.Sequential(
             nn.Linear(self.dim2, self.dim3, bias=True),
             nn.LeakyReLU(),
             nn.BatchNorm1d(self.dim3),
-            nn.Dropout(p=drop_ratio)
+            nn.Dropout(p=self.drop_ratio)
         )
 
         self.smx = nn.Sequential(

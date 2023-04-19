@@ -27,6 +27,7 @@ class ConnDataset(InMemoryDataset):
 
         self.val_node_fill = cfg.dataset.node_mat_fill_val
         self.val_edge_offset = cfg.dataset.edge_mat_offset
+        self.eps: float = 1e-10
         self.logger: logging.Logger = logging.getLogger(cfg.log.log_name)
         self.override_data(cfg.dataset.override_data)
 
@@ -47,13 +48,32 @@ class ConnDataset(InMemoryDataset):
             ).loc[:, self.name_label_type]
         return np.array(series.tolist(), dtype=np.int)
 
+    def min_max_norm(self, x: np.ndarray):
+        temp = np.nan_to_num(x, copy=True, nan=0)
+        max_val = temp.max(initial=None)
+        min_val = temp.min(initial=None)
+
+        return ((x - min_val) / (max_val - min_val)) + self.eps
+
     def transform_edge_matrix(self, edges: np.ndarray):
+        # 1. shift all value to positive according to min value
         # edges_temp = edges.copy()
         # edges_temp = np.nan_to_num(edges_temp, False, 1e10)
         # offset = np.abs(edges_temp.min(initial=None)) + 1
         # self.val_edge_offset = offset
         # return edges + offset
-        return edges
+
+        # 2. plus fixed offset
+        # return edges + offset
+
+        # 3. original value
+        # return edges
+
+        # 4. absolute value
+        # return np.abs(edges)
+
+        # 5. Resealing to [0, 10]
+        return self.min_max_norm(edges) * 10
 
     def transform_node_matrix(self, nodes: np.ndarray):
         return np.nan_to_num(nodes, copy=True, nan=self.val_node_fill)

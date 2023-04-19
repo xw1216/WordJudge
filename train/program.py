@@ -36,7 +36,7 @@ class Train:
         self.final_loader: Optional[DataLoader] = None
         self.model_best: Optional[dict] = None
         self.loss_best: float = 1e10
-        self.acc_train_best: float = 0.75
+        self.acc_train_best: float = 0.65
         self.acc_valid_best: float = 0.0
 
     def logger(self):
@@ -73,7 +73,7 @@ class Train:
         for train_data, valid_data, test_data in loader.split():
             self.logger().info(f'Fold {k_cnt}/{loader.fold - 1} th split complete')
             train_loader = DataLoader(train_data, batch_size=self.batch_size, shuffle=True)
-            valid_loader = DataLoader(valid_data, batch_size=self.batch_size, shuffle=True)
+            valid_loader = DataLoader(valid_data, batch_size=self.batch_size, shuffle=False)
             test_loader = DataLoader(test_data, batch_size=self.batch_size, shuffle=False)
             yield train_loader, valid_loader, test_loader
 
@@ -101,12 +101,19 @@ class Train:
         self.sched = model.build_scheduler(
             name=self.cfg.train.sched,
             optim=self.optim,
-            step_size=self.cfg.model.step_size,
+            step_size=self.cfg.train.step_size,
             gamma=self.cfg.model.gamma,
+            lr=self.cfg.model.lr,
             epoch=self.cfg.train.epochs
         )
         self.logger().info('Printing scheduler type')
         self.logger().info(self.sched.__class__.__name__)
+
+    def get_optim_lr(self) -> float:
+        if self.optim is None:
+            return .0
+        else:
+            return self.optim.param_groups[0]['lr']
 
     def loss_batch(
             self, output: torch.Tensor, labels: torch.Tensor,
@@ -158,7 +165,6 @@ class Train:
 
             loss = self.loss_batch(output, data.y, weight1, weight2, score1, score2)
             loss.loss_all.backward()
-
             loss_sum += loss.loss_all.item() * data.num_graphs
 
             self.optim.step()
@@ -170,7 +176,6 @@ class Train:
 
             with torch.no_grad():
                 # self.logger().info(f'Step {step} for epoch {epoch}, loss {loss.loss_all.item()}')
-
                 log_dict = {
                     "train/step": epoch * loader.__len__() + step,
                     "train/loss_ce": loss.loss_ce,
@@ -180,10 +185,10 @@ class Train:
                     "train/loss_top1": loss.loss_top1,
                     "train/loss_top2": loss.loss_top2,
                     "train/loss_consist": loss.loss_consist,
-                    "train/pool_weight_1": torch.from_numpy(weight1_list[-1]),
-                    "train/pool_weight_2": torch.from_numpy(weight2_list[-1]),
-                    "train/top_k_score_1": torch.from_numpy(score1_list[-1]),
-                    "train/top_k_score_2": torch.from_numpy(score2_list[-1])
+                    # "train/pool_weight_1": torch.from_numpy(weight1_list[-1]),
+                    # "train/pool_weight_2": torch.from_numpy(weight2_list[-1]),
+                    # "train/top_k_score_1": torch.from_numpy(score1_list[-1]),
+                    # "train/top_k_score_2": torch.from_numpy(score2_list[-1])
                 }
                 wandb.log(log_dict)
 
@@ -194,7 +199,6 @@ class Train:
 
     def valid_loss(self, loader: DataLoader):
         self.model.eval()
-
         loss_sum, num_graph_all = 0, 0
 
         # noinspection PyTypeChecker
@@ -222,6 +226,9 @@ class Train:
             output, _, _, _, _ = self.model(data)
             predict = output.max(dim=1)[1]
             correct_sum += predict.eq(data.y).sum().item()
+
+            self.logger().warning(f'predict: {predict.tolist()}')
+            # self.logger().warning(f'label: {label.tolist()}')
 
         acc = correct_sum / num_graph_all
         return acc
@@ -259,6 +266,7 @@ class Train:
 
                 wandb.log({
                     "epoch/step": epoch,
+                    "epoch/lr": self.get_optim_lr(),
                     "epoch/loss_train": loss_train,
                     "epoch/acc_train": acc_train,
                     "epoch/loss_valid": loss_valid,
@@ -266,7 +274,7 @@ class Train:
                     "epoch/timing": timer.last()
                 })
 
-                if acc_train > self.acc_train_best and acc_valid >= self.acc_valid_best and epoch > 5:
+                if acc_train >= self.acc_train_best and acc_valid >= self.acc_valid_best and epoch > 5:
                     self.logger().info('Saving best model')
                     self.loss_best = loss_valid
                     self.acc_train_best = acc_train
@@ -338,6 +346,7 @@ class Train:
                 "batch_size": cfg.train.batch_size,
                 "optimizer": cfg.train.optim,
                 "scheduler": cfg.train.sched,
+                "step_size": cfg.train.step_size,
 
                 "lr": cfg.model.lr,
                 "gamma": cfg.model.gamma,

@@ -15,10 +15,10 @@ class CooTensor:
     def __init__(self, index: Union[np.ndarray, torch.Tensor], value: Union[np.ndarray, torch.Tensor]):
         if isinstance(index, np.ndarray):
             self.index: torch.LongTensor = torch.from_numpy(index).long()
-            self.value: torch.Tensor = torch.from_numpy(value)
+            self.value: torch.Tensor = torch.from_numpy(value).float()
         else:
-            self.index = index
-            self.value = value
+            self.index = index.long()
+            self.value = value.float()
 
     def to_tuple(self) -> tuple[torch.Tensor, torch.Tensor]:
         return self.index, self.value
@@ -59,9 +59,9 @@ class GraphBuilder:
         self.num_graph: int = len(labels)
         self.num_node: int = nodes.shape[1]
 
-        # create 3D node tensor and concat 2D row-wise
+        # load 3D node tensor and concat in 2D row-wise
         # shape = [num_node * num_sample, num_node], type = float32
-        node_tensor = torch.from_numpy(nodes).double()
+        node_tensor = torch.from_numpy(nodes).float()
         node_tensor = torch.cat(torch.unbind(node_tensor), dim=0)
 
         # turn label tensor into column vector for graph classification
@@ -75,11 +75,11 @@ class GraphBuilder:
         # cat remaining sparse element index & weight horizontally
         # shape = [2, num_remain_edge], type = int64
         edge_index_tensor = torch.LongTensor()
-        # shape = [num_remain_edge, 1], type = float32
+        # shape = [num_remain_edge,], type = float32
         edge_tensor = torch.Tensor()
 
         # batch indicator row vector
-        # shape = [num_node * num_sample], type = int64
+        # shape = [num_node * num_sample,], type = int64
         batch_tensor = torch.LongTensor()
 
         for i in range(self.num_graph):

@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, Union, Callable
+from typing import Union, Callable
 
 import torch
 
@@ -10,14 +10,14 @@ from torch_geometric.nn.pool.topk_pool import topk, filter_adj
 class PoolSelector:
     def __init__(
             self, x: Tensor, edge_index: Tensor, edge_attr: Tensor,
-            score: Tensor, batch: Tensor, pos: Tensor
+            batch: Tensor, pos: Tensor, score: Tensor
     ):
         self.x = x
         self.edge_index = edge_index
         self.edge_attr = edge_attr
-        self.score = score
         self.batch = batch
         self.pos = pos
+        self.score = score
 
 
 class TopKPool(gnn.TopKPooling):
@@ -65,4 +65,5 @@ class TopKPool(gnn.TopKPooling):
 
         # select remaining edge
         edge_index, edge_attr = filter_adj(edge_index, edge_attr, perm, num_nodes=score.size(0))
-        return PoolSelector(x, edge_index, edge_attr, score[perm], batch[perm], pos[perm])
+        return PoolSelector(x, edge_index, edge_attr, batch[perm], pos[perm], score)
+        # return PoolSelector(x, edge_index, edge_attr, batch[perm], pos[perm], score[perm])

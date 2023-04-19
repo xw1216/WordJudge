@@ -1,6 +1,6 @@
 # Overall Training Parameters
 
-seed: 123
+seed: 125
 
 batch_size: 10
 epochs: 200
@@ -14,4 +14,5 @@ save_path: './save/'
 syn_file_name: 'graph.pt'
 
 optim: 'AdamW' # Adam, SGD, AdamW
-sched: 'Step' # Step, Exp, CosAnneal, Reduce, OneCycle
+sched: 'CosAnneal' # Step, Exp, CosAnneal, Reduce, OneCycle
+step_size: 200

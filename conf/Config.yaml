@@ -9,7 +9,7 @@ defaults:
 
 project: 'WordJudge'
 entity: 'outspace'
-group: 'Initial'
+group: 'Beta'
 
 cuda: True
 
