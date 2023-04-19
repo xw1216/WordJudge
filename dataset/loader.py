@@ -27,7 +27,7 @@ class ConnDataset(InMemoryDataset):
 
         self.val_node_fill = cfg.dataset.node_mat_fill_val
         self.val_edge_offset = cfg.dataset.edge_mat_offset
-        self.log: logging.Logger = cfg.logger
+        self.logger: logging.Logger = logging.getLogger(cfg.log.log_name)
         self.override_data(cfg.dataset.override_data)
 
         # will invoke process if processed file do not exist
@@ -37,7 +37,7 @@ class ConnDataset(InMemoryDataset):
     def override_data(self, can_override: bool) -> None:
         path_syn = Path(self.path_save, 'processed', self.name_syn_file)
         if can_override and path_syn.exists():
-            self.log.warning(f'Removing existed synthesized graph data {path_syn}')
+            self.logger.warning(f'Removing existed synthesized graph data {path_syn}')
             os.remove(path_syn)
 
     def load_label(self) -> np.ndarray:
@@ -48,11 +48,12 @@ class ConnDataset(InMemoryDataset):
         return np.array(series.tolist(), dtype=np.int)
 
     def transform_edge_matrix(self, edges: np.ndarray):
-        edges_temp = edges.copy()
-        edges_temp = np.nan_to_num(edges_temp, False, 1e10)
-        offset = np.abs(edges_temp.min(initial=None)) + 1
-        self.val_edge_offset = offset
-        return edges + offset
+        # edges_temp = edges.copy()
+        # edges_temp = np.nan_to_num(edges_temp, False, 1e10)
+        # offset = np.abs(edges_temp.min(initial=None)) + 1
+        # self.val_edge_offset = offset
+        # return edges + offset
+        return edges
 
     def transform_node_matrix(self, nodes: np.ndarray):
         return np.nan_to_num(nodes, copy=True, nan=self.val_node_fill)
@@ -81,7 +82,7 @@ class ConnDataset(InMemoryDataset):
         nodes = self.transform_node_matrix(nodes)
         edges = self.transform_edge_matrix(edges)
 
-        builder = GraphBuilder(self.log)
+        builder = GraphBuilder(self.logger)
         self.data, self.slices = builder.do(nodes, edges, labels)
 
         torch.save((self.data, self.slices), self.processed_paths[0])
@@ -120,14 +121,12 @@ class KFoldGroup:
         fold_sizes[: self.n_sample % self.fold] += 1
 
         test_mask = self.__create_mask(ids, self.n_sample - fold_sizes[-1], self.n_sample)
+        # except last group as test set
+        fold_sizes = np.delete(fold_sizes, -1)
 
         cur = 0
-        for i in fold_sizes:
-            # except last group as validation set
-            if i >= len(fold_sizes - 1):
-                break
-
-            start, stop = cur, cur + fold_sizes[i]
+        for step in fold_sizes:
+            start, stop = cur, cur + step
             valid_mask = self.__create_mask(ids, start, stop)
             train_mask = np.logical_not(np.logical_or(valid_mask, test_mask))
 

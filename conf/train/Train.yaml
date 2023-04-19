@@ -2,10 +2,10 @@
 
 seed: 123
 
-batch_size: 8
-epochs: 100
+batch_size: 10
+epochs: 200
 
-folds: 10
+folds: 9
 
 load_model: False
 save_model: True
@@ -13,5 +13,5 @@ save_model: True
 save_path: './save/'
 syn_file_name: 'graph.pt'
 
-optim: 'Adam' # Adam, SGD, AdamW
+optim: 'AdamW' # Adam, SGD, AdamW
 sched: 'Step' # Step, Exp, CosAnneal, Reduce, OneCycle

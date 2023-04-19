@@ -12,8 +12,7 @@ from .timer import Timer
 
 def load_mat(mat_path: str) -> np.ndarray:
     z_mat = sio.loadmat(mat_path)['Z']
-    np_arr = np.array(z_mat)
-    return np_arr
+    return z_mat
 
 
 def convert_mat_in_path(conn_path: Path, log: logging.Logger):
@@ -40,16 +39,16 @@ def convert_mat_in_path(conn_path: Path, log: logging.Logger):
             os.remove(mat_path)
 
 
-def load_split_npy(path: Path, file_list: list[str]) -> np.ndarray:
+def load_split_npy(path: Path, file_list: list[str], num_roi: int) -> np.ndarray:
     pattern = re.compile(r'.*\.npy')
     data = None
     for file in file_list:
         if pattern.match(file):
             sub_data = np.load(str(Path(path, file)))
-            if data:
-                np.concatenate((data, sub_data))
+            if data is not None:
+                data = np.concatenate((data, sub_data.reshape((1, num_roi, num_roi))))
             else:
-                data = sub_data
+                data = sub_data.reshape((1, num_roi, num_roi))
     return data
 
 
@@ -72,7 +71,7 @@ def concat_npy(data_path: Path, conn_type: str,
         log.error(f'Unmatch sample number detected.')
         raise RuntimeError
 
-    data = load_split_npy(conn_path, file_list).reshape((sample_num, roi_num, roi_num))
+    data = load_split_npy(conn_path, file_list, roi_num)
     np.save(str(npy_path), data)
     log.info(f'Saving synthesized {conn_type} data to {npy_path}')
 
@@ -86,7 +85,7 @@ def mat2ny(cfg: DictConfig):
     edge_path = Path(data_path, edge_type)
 
     timer = Timer()
-    log: logging.Logger = cfg.logger
+    log: logging.Logger = logging.getLogger(cfg.log.log_name)
     sample_num = cfg.dataset.sample
     roi_num = cfg.dataset.n_roi
     can_override = cfg.dataset.override_data
@@ -95,9 +94,9 @@ def mat2ny(cfg: DictConfig):
     convert_mat_in_path(node_path, log)
     convert_mat_in_path(edge_path, log)
 
-    concat_npy(node_path, node_type,
+    concat_npy(data_path, node_type,
                sample_num, roi_num, can_override, log)
-    concat_npy(edge_path, edge_type,
+    concat_npy(data_path, edge_type,
                sample_num, roi_num, can_override, log)
     timer.end()
 

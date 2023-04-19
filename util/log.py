@@ -1,10 +1,8 @@
+import sys
 import logging
 from datetime import datetime
 from pathlib import Path
 
-import wandb
-
-from wandb.sdk.lib.runid import generate_id
 from omegaconf import DictConfig, open_dict
 
 
@@ -27,9 +25,9 @@ def init_logger(
 
     formatter = init_formatter(log_format, time_format)
 
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(formatter)
-    log.addHandler(stream_handler)
+    # stream_handler = logging.StreamHandler()
+    # stream_handler.setFormatter(formatter)
+    # log.addHandler(stream_handler)
 
     file_handler = logging.FileHandler(log_path, encoding='utf-8')
     file_handler.setFormatter(formatter)
@@ -54,7 +52,6 @@ def append_logger(cfg: DictConfig) -> logging.Logger:
 
     log = init_logger(log_name, log_path, log_format, time_format)
 
-    with open_dict(cfg):
-        cfg.logger = log
+    log.info(f'{cfg.log.log_name} logger initialized')
 
     return log

@@ -1,17 +1,17 @@
 # Load config for word judge dataset
 
-label_type: 'class'   # class | field | truth | property
+label_type: 'truth'   # class | field | truth | property
 node_type: 'wRRC'      # pearson | partial | wRRC | gPPI
 edge_type: 'gPPI'     # pearson | partial | wRRC | gPPI
 
 data_path: './data/'
 label_file_name: 'labels.csv'
 
-override_data: True
+override_data: False
 
 sample: 180
 n_roi: 360
-n_class: 6
+n_class: 2
 
 node_mat_fill_val: 10.0
 edge_mat_offset: 10.0

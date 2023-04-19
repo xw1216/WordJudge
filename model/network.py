@@ -24,7 +24,7 @@ class BrainGNN(torch.nn.Module):
         self.dim_in = dim_in
         self.dim1 = 32
         self.dim2 = 32
-        self.dim3 = 512
+        self.dim3 = 256
         self.dim_out = num_class
 
         self.conv1 = GConv(
@@ -36,8 +36,8 @@ class BrainGNN(torch.nn.Module):
         self.pool1 = TopKPool(
             in_channels=self.dim1,
             ratio=self.pool_ratio,
-            multiplier=1,
-            nonlinearity=nn.Sigmoid
+            multiplier=2,
+            nonlinearity=nn.Sigmoid()
         )
         self.conv2 = GConv(
             in_channel=self.dim1,
@@ -48,8 +48,8 @@ class BrainGNN(torch.nn.Module):
         self.pool2 = TopKPool(
             in_channels=self.dim2,
             ratio=self.pool_ratio,
-            multiplier=1,
-            nonlinearity=nn.Sigmoid
+            multiplier=2,
+            nonlinearity=nn.Sigmoid()
         )
 
         self.readout = ReadOut()
@@ -77,9 +77,9 @@ class BrainGNN(torch.nn.Module):
         h1 = self.conv1(data.x, data.edge_index, data.edge_attr, data.pos)
         res1: PoolSelector = self.pool1(h1, data.edge_index, data.edge_attr, data.batch, data.pos)
 
-        res1.edge_index, res1.edge_attr = BrainGNN.augment_adj_mat(
-            res1.edge_index, res1.edge_attr.squeeze(), res1.x.size(0)
-        )
+        # res1.edge_index, res1.edge_attr = BrainGNN.augment_adj_mat(
+        #     res1.edge_index, res1.edge_attr.squeeze(), res1.x.size(0)
+        # )
 
         h2 = self.conv2(res1.x, res1.edge_index, res1.edge_attr, res1.pos)
         res2: PoolSelector = self.pool2(h2, res1.edge_index, res1.edge_attr, res1.batch, res1.pos)

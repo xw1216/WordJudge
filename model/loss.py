@@ -13,6 +13,15 @@ class LossSelector:
         self.loss_top2: Tensor = torch.Tensor()
         self.loss_consist: Tensor = torch.Tensor()
 
+    def to_num(self):
+        self.loss_all = self.loss_all.cpu().item()
+        self.loss_ce = self.loss_ce.cpu().item()
+        self.loss_unit1 = self.loss_unit1.cpu().item()
+        self.loss_unit2 = self.loss_unit2.cpu().item()
+        self.loss_top1 = self.loss_top1.cpu().item()
+        self.loss_top2 = self.loss_top2.cpu().item()
+        self.loss_consist = self.loss_consist.cpu().item()
+
 
 def top_k_loss(score: Tensor, pool_ratio: float, eps: float = 1e-10) -> Tensor:
     if pool_ratio > 0.5:
@@ -27,12 +36,15 @@ def top_k_loss(score: Tensor, pool_ratio: float, eps: float = 1e-10) -> Tensor:
 
 
 def consist_loss(score: Tensor, labels: Tensor, n_class: int, device: torch.device) -> Tensor:
-    loss = Tensor([0])
+    loss = torch.ones(1).sum().to(device)
     for c in range(n_class):
         sub_score = score[labels == c]
         sub_score = torch.sigmoid(sub_score)
-
         m = sub_score.shape[0]
+
+        if m < 1:
+            continue
+
         w_mat = torch.ones((m, m))
         d_mat = torch.eye(m) * m
         l_mat = d_mat - w_mat

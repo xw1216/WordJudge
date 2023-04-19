@@ -12,7 +12,7 @@ class GConv(gnn.MessagePassing):
             self,
             in_channel: int, out_channel: int,
             num_cluster: int, num_roi: int,
-            is_out_norm: bool = False,
+            is_out_norm: bool = True,
             is_conv_bias: bool = True
     ):
         super().__init__(
@@ -24,6 +24,7 @@ class GConv(gnn.MessagePassing):
         self.in_channel = in_channel
         self.out_channel = out_channel
         self.is_out_norm = is_out_norm
+        self.is_conv_bias = is_conv_bias
 
         self.embed_linear = nn.Sequential(
             nn.Linear(num_roi, num_cluster, bias=False),
@@ -32,7 +33,7 @@ class GConv(gnn.MessagePassing):
         )
         self.conv_activate = nn.LeakyReLU()
 
-        if is_conv_bias:
+        if self.is_conv_bias:
             # bias vector for conv layer, shape = (out_channel,)
             self.bias = nn.Parameter(torch.Tensor(self.out_channel))
         else:
@@ -41,6 +42,7 @@ class GConv(gnn.MessagePassing):
         self.reset_parameters()
 
     def reset_parameters(self):
+        # TODO confirm fan_in parameter
         uniform(self.in_channel, self.bias)
 
     def forward(self, x: Tensor, edge_index: Tensor, edge_weight: Tensor, pos: Tensor) -> Tensor:
@@ -49,7 +51,7 @@ class GConv(gnn.MessagePassing):
 
         # calcu weight linear combination represent community basis function
         # shape = (num_node, in_channel, out_channel)
-        weight = self.embed_linear(pos).view(-1, self.in_channel, self.out_channel)
+        weight = self.embed_linear(pos.float()).view(-1, self.in_channel, self.out_channel)
 
         # (num_node, 1, out_channel) = (num_node, 1, in_channel) x (num_node, in_channel, out_channel)
         x = torch.matmul(x.unsqueeze(1), weight).squeeze(1)
@@ -92,3 +94,7 @@ class GConv(gnn.MessagePassing):
             # L2 normalization in feature wise
             x_new = nn.functional.normalize(x_new, p=2, dim=-1)
         return self.conv_activate(x_new)
+
+    def __repr__(self) -> str:
+        return (f'{self.__class__.__name__}(in_dim={self.in_channel}, out_dim={self.out_channel}, '
+                f'norm={self.is_out_norm}, bias={self.is_conv_bias})')

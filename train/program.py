@@ -21,13 +21,13 @@ class Train:
         self.cfg: DictConfig = cfg
         self.logger_name: str = cfg.log.log_name
         self.group: str = cfg.group
-        self.group_id: str = generate_id().upper()
+        self.group_id: str = generate_id(5).upper()
 
         self.seed: int = self.cfg.train.seed
         self.epochs: int = self.cfg.train.epochs
         self.folds: int = self.cfg.train.folds
         self.batch_size: int = self.cfg.train.batch_size
-        self.device = self.define_device()
+        self.device: torch.device = self.define_device()
 
         self.model: Optional[model.BrainGNN] = None
         self.optim: Optional[Optimizer] = None
@@ -36,9 +36,8 @@ class Train:
         self.final_loader: Optional[DataLoader] = None
         self.model_best: Optional[dict] = None
         self.loss_best: float = 1e10
-
-        wandb.define_metric("train/step")
-        wandb.define_metric("train/*", step_metric="train/step")
+        self.acc_train_best: float = 0.75
+        self.acc_valid_best: float = 0.0
 
     def logger(self):
         return logging.getLogger(self.logger_name)
@@ -69,9 +68,10 @@ class Train:
 
         k_cnt = 1
 
-        self.logger().info('Splitting data into K Fold')
+        self.logger().info(f'Splitting data into {self.folds} Fold')
+        self.logger().info(f'{self.folds - 2} random as Train Set, 1 random as Valid Set, 1 as Test Set')
         for train_data, valid_data, test_data in loader.split():
-            self.logger().info(f'Fold {k_cnt}/{loader.fold} split complete')
+            self.logger().info(f'Fold {k_cnt}/{loader.fold - 1} th split complete')
             train_loader = DataLoader(train_data, batch_size=self.batch_size, shuffle=True)
             valid_loader = DataLoader(valid_data, batch_size=self.batch_size, shuffle=True)
             test_loader = DataLoader(test_data, batch_size=self.batch_size, shuffle=False)
@@ -81,10 +81,12 @@ class Train:
         self.model = model.BrainGNN(
             dim_in=self.cfg.dataset.n_roi,
             num_class=self.cfg.dataset.n_class,
-            num_cluster=self.cfg.train.n_cluster,
-            pool_ratio=self.cfg.train.pool_ratio,
-            drop_ratio=self.cfg.train.drop_ratio
+            num_cluster=self.cfg.model.n_cluster,
+            pool_ratio=self.cfg.model.pool_ratio,
+            drop_ratio=self.cfg.model.drop_ratio
         ).to(self.device)
+
+        self.logger().info('Printing model construction')
         self.logger().info(self.model)
 
         self.optim = model.build_optimizer(
@@ -93,6 +95,7 @@ class Train:
             lr=self.cfg.model.lr,
             weight_decay=self.cfg.model.weight_decay
         )
+        self.logger().info('Printing optimizer config')
         self.logger().info(self.optim)
 
         self.sched = model.build_scheduler(
@@ -102,7 +105,8 @@ class Train:
             gamma=self.cfg.model.gamma,
             epoch=self.cfg.train.epochs
         )
-        self.logger().info(self.sched)
+        self.logger().info('Printing scheduler type')
+        self.logger().info(self.sched.__class__.__name__)
 
     def loss_batch(
             self, output: torch.Tensor, labels: torch.Tensor,
@@ -135,10 +139,8 @@ class Train:
         return res
 
     def train(self, epoch: int, loader: DataLoader):
-        self.logger().info('Training Start...')
-        self.sched.step()
-        for param in self.optim.param_groups:
-            self.logger().info(param)
+        # for param in self.optim.param_groups:
+        #     self.logger().info(param)
 
         self.model.train()
         score1_list, score2_list = [], []
@@ -156,6 +158,7 @@ class Train:
 
             loss = self.loss_batch(output, data.y, weight1, weight2, score1, score2)
             loss.loss_all.backward()
+
             loss_sum += loss.loss_all.item() * data.num_graphs
 
             self.optim.step()
@@ -165,28 +168,31 @@ class Train:
             weight1_list.append(weight1.detach().cpu().numpy())
             weight2_list.append(weight2.detach().cpu().numpy())
 
-            wandb.log({
-                "train/step": epoch * loader.__len__() + step,
-                "train/loss_ce": loss.loss_ce,
-                "train/loss_avg": loss.loss_all,
-                "train/loss_unit1": loss.loss_unit1,
-                "train/loss_unit2": loss.loss_unit2,
-                "train/loss_top1": loss.loss_top1,
-                "train/loss_top2": loss.loss_top2,
-                "train/loss_consist": loss.loss_consist,
-                "train/pool_weight_1": weight1,
-                "train/pool_weight_2": weight2,
-                "train/top_k_score_1": score1,
-                "train/top_k_score_2": score2
-            })
+            with torch.no_grad():
+                # self.logger().info(f'Step {step} for epoch {epoch}, loss {loss.loss_all.item()}')
+
+                log_dict = {
+                    "train/step": epoch * loader.__len__() + step,
+                    "train/loss_ce": loss.loss_ce,
+                    "train/loss_avg": loss.loss_all,
+                    "train/loss_unit1": loss.loss_unit1,
+                    "train/loss_unit2": loss.loss_unit2,
+                    "train/loss_top1": loss.loss_top1,
+                    "train/loss_top2": loss.loss_top2,
+                    "train/loss_consist": loss.loss_consist,
+                    "train/pool_weight_1": torch.from_numpy(weight1_list[-1]),
+                    "train/pool_weight_2": torch.from_numpy(weight2_list[-1]),
+                    "train/top_k_score_1": torch.from_numpy(score1_list[-1]),
+                    "train/top_k_score_2": torch.from_numpy(score2_list[-1])
+                }
+                wandb.log(log_dict)
+
             step += 1
 
         loss_avg = loss_sum / num_graph_all
-
         return loss_avg, score1_list, score2_list, weight1_list, weight2_list
 
     def valid_loss(self, loader: DataLoader):
-        self.logger().info('Loss Testing Start...')
         self.model.eval()
 
         loss_sum, num_graph_all = 0, 0
@@ -205,7 +211,6 @@ class Train:
         return loss_avg
 
     def valid_acc(self, loader: DataLoader):
-        self.logger().info('Acc Testing Start...')
         self.model.eval()
         num_graph_all, correct_sum = 0, 0
 
@@ -230,12 +235,10 @@ class Train:
 
         fold = 0
 
+        self.logger().info('Training Start...')
         for train_loader, valid_loader, test_loader in self.build_kfold_graph_loader():
             self.build_model()
             self.final_loader = test_loader
-
-            self.logger().info('Printing model construction')
-            self.logger().info(self.model)
 
             run_wandb = self.createWandbRun(self.group, 'train', fold)
             timer = util.Timer()
@@ -244,26 +247,30 @@ class Train:
 
                 loss_train, _, _, _, _ = self.train(epoch, train_loader)
                 acc_train = self.valid_acc(train_loader)
-                self.logger().info(f'Epoch {epoch}, Train Loss {loss_train}, Train Acc {acc_train}')
+                self.logger().warning(f'*** Epoch {epoch}, Train Loss {loss_train}, Train Acc {acc_train}')
+
+                self.sched.step()
 
                 loss_valid = self.valid_loss(valid_loader)
                 acc_valid = self.valid_acc(valid_loader)
-                self.logger().info(f'Epoch {epoch}, Valid Loss {loss_valid}, Valid Acc {acc_valid}')
+                self.logger().warning(f'*** Epoch {epoch}, Valid Loss {loss_valid}, Valid Acc {acc_valid}')
 
                 timer.end()
 
                 wandb.log({
-                    "epoch": epoch,
-                    "loss_train": loss_train,
-                    "acc_train": acc_train,
-                    "loss_valid": loss_valid,
-                    "acc_valid": acc_valid,
-                    "timing": timer.last()
+                    "epoch/step": epoch,
+                    "epoch/loss_train": loss_train,
+                    "epoch/acc_train": acc_train,
+                    "epoch/loss_valid": loss_valid,
+                    "epoch/acc_valid": acc_valid,
+                    "epoch/timing": timer.last()
                 })
 
-                if loss_valid < self.loss_best and epoch > 5:
+                if acc_train > self.acc_train_best and acc_valid >= self.acc_valid_best and epoch > 5:
                     self.logger().info('Saving best model')
                     self.loss_best = loss_valid
+                    self.acc_train_best = acc_train
+                    self.acc_valid_best = acc_valid
                     self.model_best = copy.deepcopy(self.model.state_dict())
 
                     if self.cfg.train.save_model:
@@ -274,13 +281,11 @@ class Train:
             fold += 1
             run_wandb.finish()
 
-        self.folds = fold
-
     def test(self):
         if self.cfg.train.load_model:
             self.build_model()
             run_wandb = self.createWandbRun(self.group, 'test')
-            for fold in range(self.folds):
+            for fold in range(self.folds - 1):
                 model_path = Path(self.cfg.train.save_path, 'fold-' + str(fold) + '.pth')
                 if model_path.exists():
                     model_dict = torch.load(model_path)
@@ -288,9 +293,12 @@ class Train:
                     self.model.eval()
                     loss_test = self.valid_loss(self.final_loader)
                     acc_test = self.valid_acc(self.final_loader)
+
+                    self.logger().warning(f'*** Final Test loss {loss_test}, acc {acc_test}')
+
                     wandb.log({
-                        "fold": fold,
-                        "loss_test": loss_test,
+                        "epoch/step": fold,
+                        "epoch/loss_test": loss_test,
                         "acc_test": acc_test,
                     })
 
@@ -302,16 +310,19 @@ class Train:
             run_wandb = self.createWandbRun(self.group, 'test')
             loss_test = self.valid_loss(self.final_loader)
             acc_test = self.valid_acc(self.final_loader)
+
+            self.logger().warning(f'*** Final Test loss {loss_test}, acc {acc_test}')
+
             wandb.log({
-                "fold": 0,
-                "loss_test": loss_test,
-                "acc_test": acc_test,
+                "epoch/step": 0,
+                "epoch/loss_test": loss_test,
+                "epoch/acc_test": acc_test,
             })
             run_wandb.finish()
 
     def createWandbRun(self, group: str, job_type: str, fold: int = 0):
         cfg = self.cfg
-        group = f'{self.group_id}-{group}'
+        group = f'{group}-{self.group_id}'
         name = f'{group}-{job_type}-{fold}'
         run = wandb.init(
             project=cfg.project,
@@ -338,4 +349,8 @@ class Train:
                 "lambda-group": cfg.model.lamb_consist,
             }
         )
+        wandb.define_metric("train/step")
+        wandb.define_metric("train/*", step_metric="train/step")
+        wandb.define_metric("epoch/step")
+        wandb.define_metric("epoch/*", step_metric="epoch/step")
         return run

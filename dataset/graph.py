@@ -1,19 +1,24 @@
+from typing import Union
 import logging
+
 import torch
 import numpy as np
 import networkx as nx
-import scipy.sparse as sci_spar
 
-import torch_geometric as pyg
 import torch_sparse as pys
-
+import torch_geometric as pyg
+import scipy.sparse as sci_spar
 from torch_geometric.data import Data
 
 
 class CooTensor:
-    def __init__(self, index: np.ndarray, value: np.ndarray):
-        self.index: torch.LongTensor = torch.from_numpy(index).long()
-        self.value: torch.Tensor = torch.from_numpy(value)
+    def __init__(self, index: Union[np.ndarray, torch.Tensor], value: Union[np.ndarray, torch.Tensor]):
+        if isinstance(index, np.ndarray):
+            self.index: torch.LongTensor = torch.from_numpy(index).long()
+            self.value: torch.Tensor = torch.from_numpy(value)
+        else:
+            self.index = index
+            self.value = value
 
     def to_tuple(self) -> tuple[torch.Tensor, torch.Tensor]:
         return self.index, self.value
@@ -56,16 +61,16 @@ class GraphBuilder:
 
         # create 3D node tensor and concat 2D row-wise
         # shape = [num_node * num_sample, num_node], type = float32
-        node_tensor = torch.from_numpy(nodes).float()
+        node_tensor = torch.from_numpy(nodes).double()
         node_tensor = torch.cat(torch.unbind(node_tensor), dim=0)
 
         # turn label tensor into column vector for graph classification
-        # shape = [num_sample, 1], type = int64
-        labels_tensor = torch.from_numpy(labels.reshape((-1, 1))).long()
+        # shape = [num_sample,], type = int64
+        labels_tensor = torch.from_numpy(labels).long()
 
         # diagonal matrix v stack num_sample times
         # shape = [num_node * num_sample, num_node], type = float32
-        pseudo_tensor = torch.tile(torch.eye(self.num_node), (self.num_graph, 1))
+        pseudo_tensor = torch.tile(torch.eye(self.num_node).long(), (self.num_graph, 1))
 
         # cat remaining sparse element index & weight horizontally
         # shape = [2, num_remain_edge], type = int64
@@ -78,35 +83,38 @@ class GraphBuilder:
         batch_tensor = torch.LongTensor()
 
         for i in range(self.num_graph):
-            self.log.info(f'Building subject graph for {i}/{self.num_graph}')
+            self.log.info(f'Building subject graph for {i + 1}/{self.num_graph}')
             edge_sparse_tensor = self.single_build(edges[i])
 
-            torch.cat((edge_index_tensor, edge_sparse_tensor.index), dim=1)
-            torch.cat((edge_tensor, edge_sparse_tensor.value), dim=0)
+            edge_sparse_tensor.index += self.num_node * i
+            edge_index_tensor = torch.cat((edge_index_tensor, edge_sparse_tensor.index), dim=1)
+            edge_tensor = torch.cat((edge_tensor, edge_sparse_tensor.value), dim=0)
 
-            torch.cat((batch_tensor, torch.tile(torch.Tensor([i]).long(), (self.num_node,))))
+            batch_tensor = torch.cat((batch_tensor, torch.tile(torch.Tensor([i]).long(), (self.num_node,))))
 
-        edge_tensor = torch.transpose(edge_tensor, 0, 1)
+        # edge_tensor = torch.transpose(edge_tensor, 0, 1)
 
         [node_slice, edge_slice, edge_index_tensor] = \
             self.align_slice(edge_index_tensor, batch_tensor)
 
+        edge_tensor = edge_tensor.reshape(-1, 1)
+
         data = Data(
-            x=node_tensor,
-            edge_index=edge_index_tensor,
-            edge_attr=edge_tensor,
-            y=labels_tensor,
-            pos=pseudo_tensor
+            x=node_tensor.float(),
+            edge_index=edge_index_tensor.long(),
+            edge_attr=edge_tensor.float(),
+            y=labels_tensor.long(),
+            pos=pseudo_tensor.float()
         )
 
         data.validate(raise_on_error=True)
 
         slices = {
-            'x': node_slice,
-            'edge_index': edge_slice,
-            'edge_attr': edge_slice,
+            'x': node_slice.long(),
+            'edge_index': edge_slice.long(),
+            'edge_attr': edge_slice.long(),
             'y': torch.arange(0, self.num_graph + 1, dtype=torch.long),
-            'pos': node_slice,
+            'pos': node_slice.long(),
         }
 
         return data, slices
@@ -118,12 +126,12 @@ class GraphBuilder:
         # 0 weight elements are removed
         sparse_arr: sci_spar.csr_array = nx.to_scipy_sparse_array(graph)
         adj_coo_arr: sci_spar.coo_array = sparse_arr.tocoo()
-        coo_len = len(adj_coo_arr)
+        coo_len = len(adj_coo_arr.row)
 
         # ndarray [2, dim^2] element index of sparse matrix and 1: row index 2: col index
         edge_index = np.stack([adj_coo_arr.row, adj_coo_arr.col])
 
-        # ndarray [1, dim^2] edge weight of sparse matrix - dim^2 edges in total
+        # ndarray [dim^2,] edge weight of sparse matrix - dim^2 edges in total
         edge_feature = np.zeros(coo_len)
         for i in range(coo_len):
             edge_feature[i] = edges[adj_coo_arr.row[i], adj_coo_arr.col[i]]

@@ -1,19 +1,15 @@
-from typing import Optional
-
 import hydra
-import wandb
 
-
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import  DictConfig
 
 import util
 from train import Train
 
 
-@hydra.main(config_path="conf", config_name="config", version_base=None)
+@hydra.main(config_path="conf", config_name="Config", version_base=None)
 def main(cfg: DictConfig) -> None:
-    util.create_project_dir(cfg)
-    util.append_logger(cfg)
+    log = util.append_logger(cfg)
+    util.create_project_dir(cfg, log)
 
     program = Train(cfg)
     program.run()

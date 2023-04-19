@@ -9,6 +9,10 @@ defaults:
 
 project: 'WordJudge'
 entity: 'outspace'
-group: 'initial'
+group: 'Initial'
 
 cuda: True
+
+hydra:
+  run:
+    dir: ./log/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}

@@ -26,5 +26,8 @@ class ReadOut(torch.nn.Module):
 
         return torch.cat((read_1, read_2), dim=1)
 
+    def __repr__(self):
+        return f'{self.__class__.__name__}(mean || max)'
+
 
 
