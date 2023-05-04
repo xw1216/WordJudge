@@ -51,7 +51,8 @@ class TopKPool(gnn.TopKPooling):
         score = score / self.weight.norm(p=2, dim=-1)
 
         # s after normal distribution transform
-        score = (score - torch.mean(score, dim=0, keepdim=False)) / torch.var(score, dim=0, keepdim=False)
+        score = (score - torch.mean(score.detach(), dim=0, keepdim=False)) / torch.var(
+            score.detach(), dim=0, keepdim=False)
 
         # s applied with additional non-linear transform
         score = self.nonlinearity(score)
@@ -61,9 +62,11 @@ class TopKPool(gnn.TopKPooling):
 
         # scale x by score and multiplier
         x = x[perm] * score[perm].view(-1, 1)
-        x = self.multiplier * x if self.multiplier != 1 else x
+        x_out = self.multiplier * x if self.multiplier != 1 else x
 
         # select remaining edge
         edge_index, edge_attr = filter_adj(edge_index, edge_attr, perm, num_nodes=score.size(0))
-        return PoolSelector(x, edge_index, edge_attr, batch[perm], pos[perm], score)
+
+        # TODO choose score index and check score loss chain
+        return PoolSelector(x_out, edge_index, edge_attr, batch[perm], pos[perm], score)
         # return PoolSelector(x, edge_index, edge_attr, batch[perm], pos[perm], score[perm])

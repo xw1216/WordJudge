@@ -39,7 +39,7 @@ def consist_loss(score: Tensor, labels: Tensor, n_class: int, device: torch.devi
     loss = torch.zeros(1).sum().to(device)
     for c in range(n_class):
         sub_score = score[labels == c]
-        sub_score = torch.sigmoid(sub_score)
+        # sub_score = torch.sigmoid(sub_score)
         m = sub_score.shape[0]
 
         if m < 1:
@@ -54,7 +54,7 @@ def consist_loss(score: Tensor, labels: Tensor, n_class: int, device: torch.devi
         res = torch.trace(torch.transpose(sub_score, 0, 1) @ l_mat @ sub_score) / (m ** 2)
         loss += res
 
-    return loss * 2
+    return loss
 
 
 def unit_loss(weight: Tensor) -> Tensor:

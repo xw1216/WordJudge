@@ -1,11 +1,11 @@
 # Overall Training Parameters
 
-seed: 125
+seed: 123
 
 batch_size: 10
 epochs: 200
 
-folds: 9
+folds: 18
 
 load_model: False
 save_model: True

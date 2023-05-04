@@ -26,7 +26,7 @@ class ConnDataset(InMemoryDataset):
         self.name_syn_file: str = cfg.train.syn_file_name
 
         self.val_node_fill = cfg.dataset.node_mat_fill_val
-        self.val_edge_offset = cfg.dataset.edge_mat_offset
+        # self.val_edge_offset = cfg.dataset.edge_mat_offset
         self.eps: float = 1e-10
         self.logger: logging.Logger = logging.getLogger(cfg.log.log_name)
         self.override_data(cfg.dataset.override_data)
@@ -72,11 +72,12 @@ class ConnDataset(InMemoryDataset):
         # 4. absolute value
         # return np.abs(edges)
 
-        # 5. Resealing to [0, 10]
-        return self.min_max_norm(edges) * 10
+        # 5. Resealing to [-20, 20]
+        return self.min_max_norm(edges) * 40 - 20
 
     def transform_node_matrix(self, nodes: np.ndarray):
-        return np.nan_to_num(nodes, copy=True, nan=self.val_node_fill)
+        temp = np.nan_to_num(nodes, copy=True, nan=self.val_node_fill)
+        return self.min_max_norm(temp) * 40 - 20
 
     @property
     def raw_file_names(self) -> Union[str, List[str], Tuple]:

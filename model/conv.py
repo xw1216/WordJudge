@@ -16,8 +16,9 @@ class GConv(gnn.MessagePassing):
             self,
             in_channel: int, out_channel: int,
             num_cluster: int, num_roi: int,
-            is_out_norm: bool = True,
-            is_conv_bias: bool = True
+            is_out_norm: bool = False,
+            is_conv_bias: bool = True,
+            is_out_activate: bool = True
     ):
         super().__init__(
             aggr='add',
@@ -28,14 +29,15 @@ class GConv(gnn.MessagePassing):
         self.in_channel = in_channel
         self.out_channel = out_channel
         self.is_out_norm = is_out_norm
+        self.is_out_activate = is_out_activate
         self.is_conv_bias = is_conv_bias
 
         self.embed_linear = nn.Sequential(
             nn.Linear(num_roi, num_cluster, bias=False),
-            nn.LeakyReLU(),
+            nn.PReLU(),
             nn.Linear(num_cluster, self.in_channel * self.out_channel, bias=True)
         )
-        self.conv_activate = nn.LeakyReLU()
+        self.conv_activate = nn.PReLU()
 
         if self.is_conv_bias:
             # bias vector for conv layer, shape = (out_channel,)
@@ -57,13 +59,13 @@ class GConv(gnn.MessagePassing):
         weight = self.embed_linear(pos.float()).view(-1, self.in_channel, self.out_channel)
 
         # (num_node, 1, out_channel) = (num_node, 1, in_channel) x (num_node, in_channel, out_channel)
-        x = torch.matmul(x.unsqueeze(1), weight).squeeze(1)
+        x_out = torch.matmul(x.unsqueeze(1), weight).squeeze(1)
 
         # call internal node message passing
         return self.propagate(
             edge_index=edge_index,
             size=None,
-            x=x,
+            x=x_out,
             edge_weight=edge_weight
         )
 
@@ -73,7 +75,8 @@ class GConv(gnn.MessagePassing):
             num_nodes: Optional[int] = None, dim: int = 0
     ):
         dim_size = maybe_num_nodes(index, num_nodes)
-        src_sum = scatter(src.detach(), index, dim, dim_size=dim_size, reduce='sum').index_select(dim, index)
+        src_abs = torch.abs(src)
+        src_sum = scatter(src_abs, index, dim, dim_size=dim_size, reduce='sum').index_select(dim, index)
 
         return src / src_sum
 
@@ -84,21 +87,22 @@ class GConv(gnn.MessagePassing):
     ) -> Tensor:
         # send message from neighbor node j that belongs to Neighbor(i) to central node i
 
+        # TODO choose message function
         # edge weight normalize
         # shape = (edge_num, 1)
-        # 1. e_ij = e_ij / sum_{j in Neighbor(i)}(e_ij)
-        # edge_weight_group_norm = self.group_norm(
-        #     src=edge_weight,
-        #     index=edge_index_i,
-        #     num_nodes=size_i
-        # ).view(-1, 1)
-
-        # 2. e_ij = group_softmax(E)
-        edge_weight_group_norm = pyg.utils.softmax(
+        # 1. e_ij = e_ij / sum_{j in Neighbor(i)}(abs(e_ij))
+        edge_weight_group_norm = self.group_norm(
             src=edge_weight,
             index=edge_index_i,
             num_nodes=size_i
         ).view(-1, 1)
+
+        # 2. e_ij = group_softmax(E)
+        # edge_weight_group_norm = pyg.utils.softmax(
+        #     src=edge_weight,
+        #     index=edge_index_i,
+        #     num_nodes=size_i
+        # ).view(-1, 1)
 
         # scale node feature by normed edge weight, use broadcasting element-wise mul
         # shape = (edge_num, out_channel)
@@ -109,12 +113,16 @@ class GConv(gnn.MessagePassing):
     def update(self, inputs: Tensor, x: Tensor) -> Tensor:
         # input, x shape = (num_node, out_channel)
         x_new = inputs + x
-        x_new = self.conv_activate(x_new)
         if self.bias is not None:
             x_new += self.bias
         if self.is_out_norm:
             # L2 normalization in feature wise
             x_new = nn.functional.normalize(x_new, p=2, dim=-1)
+
+        if self.is_out_activate:
+            x_aggr = self.conv_activate(x_new)
+            return x_aggr
+
         return x_new
 
     def __repr__(self) -> str:
