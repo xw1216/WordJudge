@@ -61,9 +61,11 @@ class Train:
         loader = dataset.KFoldGroup(
             conn,
             log=self.logger(),
+            session=self.cfg.dataset.n_session,
+            batch_size=self.batch_size,
             fold=self.folds,
             seed=self.seed,
-            shuffle=True
+            stratified=self.cfg.train.stratified
         )
 
         k_cnt = 1
@@ -249,8 +251,6 @@ class Train:
 
             if is_print_label:
                 self.logger().warning(f'label: {data.y.tolist()}, predict: {predict.tolist()}')
-            # self.logger().warning(f'predict: {predict.tolist()}')
-            # self.logger().warning(f'label: {label.tolist()}')
 
         acc = correct_sum / num_graph_all
         return acc
@@ -398,6 +398,11 @@ class Train:
                 "optimizer": cfg.train.optim,
                 "scheduler": cfg.train.sched,
                 "step_size": cfg.train.step_size,
+
+                "aug_noise": cfg.dataset.aug_noise,
+                "aug_noise_bound": cfg.dataset.noise_bound,
+                "aug_mixup": cfg.dataset.aug_mixup,
+                "aug_mixup_alpha": cfg.dataset.mixup_alpha
             }
         )
         wandb.define_metric("train/step")

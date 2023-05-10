@@ -86,7 +86,7 @@ def mat2ny(cfg: DictConfig):
 
     timer = Timer()
     log: logging.Logger = logging.getLogger(cfg.log.log_name)
-    sample_num = cfg.dataset.sample
+    sample_num = cfg.dataset.n_sample
     roi_num = cfg.dataset.n_roi
     can_override = cfg.dataset.override_data
 

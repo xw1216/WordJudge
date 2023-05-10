@@ -1,1 +1,2 @@
-from .loader import ConnDataset, KFoldGroup
+from .loader import ConnDataset
+from .kfold import KFoldGroup

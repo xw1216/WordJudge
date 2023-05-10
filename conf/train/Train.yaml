@@ -2,10 +2,11 @@
 
 seed: 123
 
-batch_size: 10
-epochs: 200
+batch_size: 18
+epochs: 100
 
-folds: 18
+folds: 30
+stratified: True
 
 load_model: False
 save_model: True

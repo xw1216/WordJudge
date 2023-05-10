@@ -9,9 +9,17 @@ label_file_name: 'labels.csv'
 
 override_data: True
 
-sample: 180
+n_sample: 180
 n_roi: 47
 n_class: 2
+n_session: 6
+
+sample_aug_noise_mul: 2
+aug_noise: true
+noise_bound: 0.05
+
+aug_mixup: false
+sample_aug_mixup_mul: 1
+mixup_alpha: 0.3
 
 node_mat_fill_val: 0.0
-# edge_mat_offset: 10.0
