@@ -3,7 +3,6 @@ from typing import Optional
 import torch
 
 from torch import nn, Tensor
-import torch_geometric as pyg
 from torch_geometric import nn as gnn
 from torch_geometric.utils import scatter
 from torch_geometric.utils.num_nodes import maybe_num_nodes

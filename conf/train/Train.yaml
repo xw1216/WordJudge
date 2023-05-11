@@ -3,9 +3,9 @@
 seed: 123
 
 batch_size: 18
-epochs: 100
+epochs: 200
 
-folds: 30
+folds: 20
 stratified: True
 
 load_model: False
@@ -16,4 +16,4 @@ syn_file_name: 'graph.pt'
 
 optim: 'AdamW' # Adam, SGD, AdamW
 sched: 'CosAnneal' # Step, Exp, CosAnneal, Reduce, OneCycle
-step_size: 200
+step_size: 250
