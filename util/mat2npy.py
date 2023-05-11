@@ -58,7 +58,7 @@ def concat_npy(data_path: Path, conn_type: str,
     npy_path = Path(data_path, f'{conn_type}.npy')
     if os.path.exists(npy_path):
         if override:
-            log.warning('Removing existed concat {conn_type} data')
+            log.warning(f'Removing existed concat {conn_type} data')
             os.remove(npy_path)
         else:
             log.info(f'File {npy_path} detected, skip concat')

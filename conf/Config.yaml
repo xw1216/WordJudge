@@ -7,9 +7,9 @@ defaults:
   - train: Train
   - log: Log
 
-project: 'WordJudge'
+project: 'WordJudge_Atlas_lim'
 entity: 'outspace'
-group: 'Atlas_lim'
+group: 'Atlas_lim_RRC_wRRC'
 
 cuda: True
 

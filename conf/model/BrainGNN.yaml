@@ -1,6 +1,6 @@
 # Model Parameters for BrainGNN
 
-lr: 0.003
+lr: 0.002
 gamma: 0.5
 
 momentum: 0.9
@@ -8,11 +8,11 @@ weight_decay: 1e-4
 
 n_cluster: 2
 
-pool_ratio: 0.4
+pool_ratio: 0.5
 drop_ratio: 0.5
 eps: 1e-10
 
-lamb_top: 0.1
+lamb_top: 0.5
 lamb_consist: 0.5
 
 dim_conv1: 8

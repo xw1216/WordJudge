@@ -264,6 +264,9 @@ class Train:
 
         fold = 0
 
+        torch.backends.cudnn.enabled = True
+        torch.backends.cudnn.benchmark = True
+
         self.logger().info('Training Start...')
         for train_loader, valid_loader, test_loader in self.build_kfold_graph_loader():
             self.build_model()
@@ -297,7 +300,7 @@ class Train:
                     "epoch/timing": timer.last()
                 })
 
-                if acc_train >= self.acc_train_best and acc_valid >= self.acc_valid_best and epoch > 5:
+                if acc_train >= self.acc_train_best and acc_valid >= self.acc_valid_best and epoch > 20:
                     self.logger().info('Saving best model')
                     self.loss_best = loss_valid
                     self.acc_train_best = acc_train
