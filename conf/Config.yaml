@@ -9,7 +9,7 @@ defaults:
 
 project: 'WordJudge_Atlas_lim'
 entity: 'outspace'
-group: 'Atlas_lim_RRC_wRRC'
+group: 'RRC_wRRC'
 
 cuda: True
 

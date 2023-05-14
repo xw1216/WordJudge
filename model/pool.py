@@ -50,7 +50,6 @@ class TopKPool(gnn.TopKPooling):
         score = (attn * self.weight).sum(dim=-1)
         score = score / self.weight.norm(p=2, dim=-1)
 
-        # TODO whether mean and var should detach form compute graph
         # s after normal distribution transform
         # score = (score - torch.mean(score.detach(), dim=0, keepdim=False)) / torch.var(
         #     score.detach(), dim=0, keepdim=False)

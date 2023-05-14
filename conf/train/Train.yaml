@@ -13,6 +13,7 @@ save_model: True
 
 save_path: './save/'
 syn_file_name: 'graph.pt'
+final_file_name: 'final.pth'
 
 optim: 'AdamW' # Adam, SGD, AdamW
 sched: 'CosAnneal' # Step, Exp, CosAnneal, Reduce, OneCycle

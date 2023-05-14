@@ -4,6 +4,8 @@ label_type: 'truth'   # class | field | truth | property
 node_type: 'RRC_STD_Atlas_lim'      # pearson | partial | wRRC | gPPI
 edge_type: 'wRRC_Atlas_lim'     # pearson | partial | wRRC | gPPI
 
+atlas_table_type: 'Atlas_lim'
+
 data_path: './data/'
 label_file_name: 'labels.csv'
 

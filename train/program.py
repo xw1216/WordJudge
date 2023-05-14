@@ -1,5 +1,6 @@
 import copy
 import logging
+import os
 from typing import Optional
 from pathlib import Path
 
@@ -39,6 +40,9 @@ class Train:
         self.acc_train_best: float = 0.70
         self.acc_valid_best: float = 0.50
 
+        self.atlas_table = []
+        self.timer = util.Timer()
+
     def logger(self):
         return logging.getLogger(self.logger_name)
 
@@ -53,6 +57,9 @@ class Train:
     def convert_data(self):
         util.mat2ny(self.cfg)
         self.logger().info('Data preparation complete')
+
+    def read_atlas_table(self):
+        self.atlas_table = util.read_atlas_table(cfg=self.cfg)
 
     def build_kfold_graph_loader(self) -> tuple[DataLoader, DataLoader, DataLoader]:
         self.logger().info('Building in-memory dataset')
@@ -246,7 +253,7 @@ class Train:
             num_graph_all += data.num_graphs
 
             output, _, _, _, _ = self.model(data)
-            predict = output.max(dim=1)[1]
+            predict: torch.Tensor = output.max(dim=1)[1]
             correct_sum += predict.eq(data.y).sum().item()
 
             if is_print_label:
@@ -256,11 +263,13 @@ class Train:
         return acc
 
     def run(self):
+        self.timer.start()
         self.logger().info('Printing program configurations')
         self.logger().info(OmegaConf.to_yaml(self.cfg))
 
         self.logger().info('Converting raw data to npy files')
         self.convert_data()
+        self.read_atlas_table()
 
         fold = 0
 
@@ -312,6 +321,8 @@ class Train:
                     if self.cfg.train.save_model:
                         self.logger().info('Saving best model')
                         save_path = Path(self.cfg.train.save_path, 'fold-' + str(fold) + '.pth')
+                        if save_path.exists():
+                            os.remove(save_path)
                         torch.save(self.model_best_list[-1], save_path)
 
             fold += 1
@@ -320,7 +331,69 @@ class Train:
             self.acc_valid_best = 0.50
             run_wandb.finish()
 
+    def test_specific_model(self, fold: int, acc_test_best: float):
+        loss_test = self.valid_loss(0, self.final_loader, is_final=True)
+        acc_test = self.valid_acc(self.final_loader, True)
+
+        if acc_test > acc_test_best:
+
+            self.logger().info('Saving best model on final test set')
+            save_path = Path(
+                self.cfg.train.save_path,
+                self.cfg.train.final_file_name
+            )
+            if save_path.exists():
+                os.remove(save_path)
+            torch.save(copy.deepcopy(self.model.state_dict()), save_path)
+
+        self.logger().warning(
+            f'*** Final Test fold {fold}: loss {loss_test}, acc {acc_test}'
+        )
+
+        wandb.log({
+            "test/fold": fold,
+            "test/loss_test": loss_test,
+            "test/acc_test": acc_test,
+        })
+
+    def final_test_interpret(self, loader: DataLoader):
+        self.model.eval()
+        num_graph_all, correct_sum, loss_sum = 0, 0, 0
+        score1_mean_true, score1_mean_false = torch.Tensor(), torch.Tensor()
+
+        # noinspection PyTypeChecker
+        for data in loader:
+            data = data.to(self.device)
+
+            output, weight1, weight2, score1, score2 = self.model(data)
+            loss = self.loss_batch(output, data.y, weight1, weight2, score1, score2)
+            predict: torch.Tensor = output.max(dim=1)[1]
+
+            loss_sum += loss.loss_all.item() * data.num_graphs
+            correct_sum += predict.eq(data.y).sum().item()
+            num_graph_all += data.num_graphs
+
+            true_perm = (data.y == 1)
+            score1_temp_true = score1[true_perm].view(-1).detach().cpu()
+            score1_mean_true = torch.concatenate((score1_mean_true, score1_temp_true), dim=0)
+
+            false_perm = (data.y == 0)
+            score1_temp_false = score1[false_perm].view(-1).detach().cpu()
+            score1_mean_false = torch.concatenate((score1_mean_false, score1_temp_false), dim=0)
+
+            self.logger().warning(f'label: {data.y.tolist()}, predict: {predict.tolist()}')
+
+        score1_mean_true = torch.mean(score1_mean_true, dim=0, keepdim=False)
+        score1_mean_false = torch.mean(score1_mean_false, dim=0, keepdim=False)
+        acc = correct_sum / num_graph_all
+        loss_avg = loss_sum / num_graph_all
+        community_factor: torch.Tensor = self.model.conv1.embed_linear[0].weight.detach().cpu()
+
+        return acc, loss_avg, community_factor, score1_mean_true, score1_mean_false
+
     def test(self):
+        acc_test_best = .0
+
         if self.cfg.train.load_model:
             self.build_model()
             run_wandb = self.createWandbRun(self.group, 'test')
@@ -330,39 +403,41 @@ class Train:
                     model_dict = torch.load(model_path)
                     self.model.load_state_dict(model_dict)
                     self.model.eval()
-                    loss_test = self.valid_loss(0, self.final_loader, is_final=True)
-                    acc_test = self.valid_acc(self.final_loader, True)
-
-                    self.logger().warning(f'*** Final Test loss {loss_test}, acc {acc_test}')
-
-                    wandb.log({
-                        "test/fold": fold,
-                        "test/loss_test": loss_test,
-                        "test/acc_test": acc_test,
-                    })
-
+                    self.test_specific_model(fold, acc_test_best)
             run_wandb.finish()
         else:
             run_wandb = self.createWandbRun(self.group, 'test')
             for model_best in self.model_best_list:
                 self.model.load_state_dict(model_best[1])
-                self.model.eval()
                 fold = model_best[0]
-
-                loss_test = self.valid_loss(0, self.final_loader, is_final=True)
-                acc_test = self.valid_acc(self.final_loader, True)
-
-                self.logger().warning(
-                    f'*** Final Test fold {fold}: loss {loss_test}, acc {acc_test}'
-                )
-
-                wandb.log({
-                    "test/fold": fold,
-                    "test/loss_test": loss_test,
-                    "test/acc_test": acc_test,
-                })
-
+                self.model.eval()
+                self.test_specific_model(fold, acc_test_best)
             run_wandb.finish()
+
+        save_path = Path(
+            self.cfg.train.save_path,
+            self.cfg.train.final_file_name
+        )
+        if not save_path.exists():
+            raise RuntimeError(f'Final model {str(save_path)} not found')
+
+        acc, loss, community_factor, \
+            score1_true, score1_false = self.final_test_interpret(self.final_loader)
+
+        self.timer.end()
+
+        self.logger().warning('***** Final Result *****')
+        self.logger().warning(f'Test Acc: {acc}')
+        self.logger().warning(f'Test Loss: {loss}')
+        self.logger().warning(f'Last Time: {util.Timer.to_datetime(self.timer.last())}')
+
+        run_wandb = self.createWandbRun(self.group, 'test', fold=1)
+        util.draw_atlas_interpret(
+            self.atlas_table, community_factor,
+            score1_true, score1_false,
+            Path(self.cfg.train.save_path)
+        )
+        run_wandb.finish()
 
     def createWandbRun(self, group: str, job_type: str, fold: int = 0):
         cfg = self.cfg
