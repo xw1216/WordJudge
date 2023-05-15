@@ -91,12 +91,13 @@ class BrainGNN(torch.nn.Module):
         x2 = self.mlp2(x1)
         x_out = self.mlp3(x2)
 
-        score1 = res1.score.view(x_out.size(0), -1)
-        score2 = res2.score.view(x_out.size(0), -1)
+        score1 = res1.score_norm.view(x_out.size(0), -1)
+        score2 = res2.score_norm.view(x_out.size(0), -1)
+        score1_uni = res1.score.view(x_out.size(0), -1)
 
         # x_out = torch.nn.functional.softmax(x3, dim=-1)
 
-        return x_out, self.pool1.weight, self.pool2.weight, score1, score2
+        return x_out, [self.pool1.weight, self.pool2.weight], [score1, score2], score1_uni
 
     @classmethod
     def augment_adj_mat(cls, edge_index, edge_weight, num_nodes):

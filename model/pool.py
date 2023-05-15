@@ -1,7 +1,5 @@
 from typing import Union, Callable
 
-import torch
-
 from torch import Tensor
 import torch_geometric.nn as gnn
 from torch_geometric.nn.pool.topk_pool import topk, filter_adj
@@ -10,7 +8,7 @@ from torch_geometric.nn.pool.topk_pool import topk, filter_adj
 class PoolSelector:
     def __init__(
             self, x: Tensor, edge_index: Tensor, edge_attr: Tensor,
-            batch: Tensor, pos: Tensor, score: Tensor
+            batch: Tensor, pos: Tensor, score: Tensor, score_norm: Tensor
     ):
         self.x = x
         self.edge_index = edge_index
@@ -18,6 +16,7 @@ class PoolSelector:
         self.batch = batch
         self.pos = pos
         self.score = score
+        self.score_norm = score_norm
 
 
 class TopKPool(gnn.TopKPooling):
@@ -54,19 +53,19 @@ class TopKPool(gnn.TopKPooling):
         # score = (score - torch.mean(score.detach(), dim=0, keepdim=False)) / torch.var(
         #     score.detach(), dim=0, keepdim=False)
 
-        # s applied with additional non-linear transform
-        score = self.nonlinearity(score)
-
         # select top K of num * ratio, return perm selector
         perm = topk(score, self.ratio, batch, self.min_score)
 
+        # s applied with additional non-linear transform
+        score_norm = self.nonlinearity(score)
+
         # scale x by score and multiplier
-        x = x[perm] * score[perm].view(-1, 1)
+        x = x[perm] * score_norm[perm].view(-1, 1)
         x_out = self.multiplier * x if self.multiplier != 1 else x
 
         # select remaining edge
         edge_index, edge_attr = filter_adj(edge_index, edge_attr, perm, num_nodes=score.size(0))
 
         # TODO choose score index and check score loss chain
-        return PoolSelector(x_out, edge_index, edge_attr, batch[perm], pos[perm], score)
+        return PoolSelector(x_out, edge_index, edge_attr, batch[perm], pos[perm], score, score_norm)
         # return PoolSelector(x, edge_index, edge_attr, batch[perm], pos[perm], score[perm])

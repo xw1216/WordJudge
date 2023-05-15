@@ -1,6 +1,6 @@
 # Overall Training Parameters
 
-seed: 123
+seed: 255
 
 batch_size: 18
 epochs: 200

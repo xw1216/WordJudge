@@ -1,6 +1,6 @@
 # Model Parameters for BrainGNN
 
-lr: 0.005
+lr: 0.003
 gamma: 0.5
 
 momentum: 0.9

@@ -128,26 +128,26 @@ class Train:
             return self.optim.param_groups[0]['lr']
 
     def loss_batch(
-            self, output: torch.Tensor, labels: torch.Tensor,
-            weight1: torch.Tensor, weight2: torch.Tensor,
-            score1: torch.Tensor, score2: torch.Tensor
+            self,
+            output: torch.Tensor, labels: torch.Tensor,
+            weights: torch.Tensor, scores: torch.Tensor
     ) -> model.LossSelector:
         res = model.LossSelector()
 
         res.loss_ce = model.cross_entropy_loss(output, labels)
 
-        res.loss_unit1 = model.unit_loss(weight1)
-        res.loss_unit2 = model.unit_loss(weight2)
+        res.loss_unit1 = model.unit_loss(weights[0])
+        res.loss_unit2 = model.unit_loss(weights[1])
 
         res.loss_top1 = model.top_k_loss(
-            score1, self.cfg.model.pool_ratio, self.cfg.model.eps
+            scores[0], self.cfg.model.pool_ratio, self.cfg.model.eps
         )
         res.loss_top2 = model.top_k_loss(
-            score2, self.cfg.model.pool_ratio, self.cfg.model.eps
+            scores[1], self.cfg.model.pool_ratio, self.cfg.model.eps
         )
 
         res.loss_consist = model.consist_loss(
-            score1, labels, self.cfg.dataset.n_class, self.device
+            scores[0], labels, self.cfg.dataset.n_class, self.device
         )
 
         res.loss_all = res.loss_ce + (
@@ -175,19 +175,19 @@ class Train:
             data = data.to(self.device)
             num_graph_all += data.num_graphs
 
-            output, weight1, weight2, score1, score2 = self.model(data)
+            output, weights, scores, _ = self.model(data)
 
-            loss = self.loss_batch(output, data.y, weight1, weight2, score1, score2)
+            loss = self.loss_batch(output, data.y, weights, scores)
             loss.loss_all.backward()
             loss_sum += loss.loss_all.detach().item() * data.num_graphs
 
             self.optim.step()
             self.optim.zero_grad()
 
-            score1_list.append(score1.view(-1).detach().cpu().numpy())
-            score2_list.append(score2.view(-1).detach().cpu().numpy())
-            weight1_list.append(weight1.detach().cpu().numpy())
-            weight2_list.append(weight2.detach().cpu().numpy())
+            score1_list.append(scores[0].view(-1).detach().cpu().numpy())
+            score2_list.append(scores[1].view(-1).detach().cpu().numpy())
+            weight1_list.append(weights[0].detach().cpu().numpy())
+            weight2_list.append(weights[1].detach().cpu().numpy())
 
             with torch.no_grad():
                 # self.logger().info(f'Step {step} for epoch {epoch}, loss {loss.loss_all.item()}')
@@ -221,8 +221,8 @@ class Train:
             data = data.to(self.device)
             num_graph_all += data.num_graphs
 
-            output, weight1, weight2, score1, score2 = self.model(data)
-            loss = self.loss_batch(output, data.y, weight1, weight2, score1, score2)
+            output, weights, scores, _ = self.model(data)
+            loss = self.loss_batch(output, data.y, weights, scores)
 
             loss_sum += loss.loss_all.item() * data.num_graphs
 
@@ -252,7 +252,7 @@ class Train:
             data = data.to(self.device)
             num_graph_all += data.num_graphs
 
-            output, _, _, _, _ = self.model(data)
+            output, _, _, _ = self.model(data)
             predict: torch.Tensor = output.max(dim=1)[1]
             correct_sum += predict.eq(data.y).sum().item()
 
@@ -356,6 +356,8 @@ class Train:
             "test/acc_test": acc_test,
         })
 
+        return acc_test_best
+
     def final_test_interpret(self, loader: DataLoader):
         self.model.eval()
         num_graph_all, correct_sum, loss_sum = 0, 0, 0
@@ -365,29 +367,33 @@ class Train:
         for data in loader:
             data = data.to(self.device)
 
-            output, weight1, weight2, score1, score2 = self.model(data)
-            loss = self.loss_batch(output, data.y, weight1, weight2, score1, score2)
+            output, weights, scores, score_uni = self.model(data)
+            loss = self.loss_batch(output, data.y, weights, scores)
             predict: torch.Tensor = output.max(dim=1)[1]
 
             loss_sum += loss.loss_all.item() * data.num_graphs
             correct_sum += predict.eq(data.y).sum().item()
             num_graph_all += data.num_graphs
 
+            self.logger().warning(f'label: {data.y.tolist()}, predict: {predict.tolist()}')
+
             true_perm = (data.y == 1)
-            score1_temp_true = score1[true_perm].view(-1).detach().cpu()
+            score1_temp_true = score_uni[true_perm].view(-1).detach().cpu()
             score1_mean_true = torch.concatenate((score1_mean_true, score1_temp_true), dim=0)
 
             false_perm = (data.y == 0)
-            score1_temp_false = score1[false_perm].view(-1).detach().cpu()
+            score1_temp_false = score_uni[false_perm].view(-1).detach().cpu()
             score1_mean_false = torch.concatenate((score1_mean_false, score1_temp_false), dim=0)
-
-            self.logger().warning(f'label: {data.y.tolist()}, predict: {predict.tolist()}')
 
         score1_mean_true = torch.mean(score1_mean_true, dim=0, keepdim=False)
         score1_mean_false = torch.mean(score1_mean_false, dim=0, keepdim=False)
         acc = correct_sum / num_graph_all
         loss_avg = loss_sum / num_graph_all
         community_factor: torch.Tensor = self.model.conv1.embed_linear[0].weight.detach().cpu()
+
+        self.logger().info(f'community_factor: {community_factor}')
+        self.logger().info(f'score_true: {score1_mean_true}')
+        self.logger().info(f'score_false: {score1_mean_false}')
 
         return acc, loss_avg, community_factor, score1_mean_true, score1_mean_false
 
@@ -403,7 +409,7 @@ class Train:
                     model_dict = torch.load(model_path)
                     self.model.load_state_dict(model_dict)
                     self.model.eval()
-                    self.test_specific_model(fold, acc_test_best)
+                    acc_test_best = self.test_specific_model(fold, acc_test_best)
             run_wandb.finish()
         else:
             run_wandb = self.createWandbRun(self.group, 'test')
@@ -411,7 +417,7 @@ class Train:
                 self.model.load_state_dict(model_best[1])
                 fold = model_best[0]
                 self.model.eval()
-                self.test_specific_model(fold, acc_test_best)
+                acc_test_best = self.test_specific_model(fold, acc_test_best)
             run_wandb.finish()
 
         save_path = Path(
@@ -420,9 +426,12 @@ class Train:
         )
         if not save_path.exists():
             raise RuntimeError(f'Final model {str(save_path)} not found')
+        else:
+            best_model_dict = torch.load(save_path)
+            self.model.load_state_dict(best_model_dict)
 
         acc, loss, community_factor, \
-            score1_true, score1_false = self.final_test_interpret(self.final_loader)
+            score_uni_true, score_uni_false = self.final_test_interpret(self.final_loader)
 
         self.timer.end()
 
@@ -434,7 +443,7 @@ class Train:
         run_wandb = self.createWandbRun(self.group, 'test', fold=1)
         util.draw_atlas_interpret(
             self.atlas_table, community_factor,
-            score1_true, score1_false,
+            score_uni_true, score_uni_false,
             Path(self.cfg.train.save_path)
         )
         run_wandb.finish()
