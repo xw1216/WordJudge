@@ -75,9 +75,9 @@ def draw_community_heatmap(atlas_table: list, community_factor: Tensor, save_pat
     cluster_labels = build_cluster_label(cluster_num)
 
     factor_np = community_factor.numpy()
-    vmin = np.min(factor_np)
-    vmax = np.max(factor_np)
-    norm = colors.Normalize(vmin=vmin, vmax=vmax)
+    v_min = np.min(factor_np)
+    v_max = np.max(factor_np)
+    norm = colors.Normalize(vmin=v_min, vmax=v_max)
 
     fig = plt.figure(figsize=(8, 1.8 * rows), dpi=300)
     plt.axis('off')

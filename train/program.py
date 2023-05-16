@@ -281,7 +281,7 @@ class Train:
             self.build_model()
             self.final_loader = test_loader
 
-            run_wandb = self.createWandbRun(self.group, 'train', fold)
+            run_wandb = self.createWandbRun('train', fold)
             timer = util.Timer()
             for epoch in range(0, self.epochs):
                 timer.start()
@@ -292,7 +292,6 @@ class Train:
 
                 self.sched.step()
 
-                # TODO solve overfit on train dataset
                 loss_valid = self.valid_loss(epoch, valid_loader)
                 acc_valid = self.valid_acc(valid_loader, True)
                 self.logger().warning(f'*** Epoch {epoch}, Valid Loss {loss_valid}, Valid Acc {acc_valid}')
@@ -336,7 +335,7 @@ class Train:
         acc_test = self.valid_acc(self.final_loader, True)
 
         if acc_test > acc_test_best:
-
+            acc_test_best = acc_test
             self.logger().info('Saving best model on final test set')
             save_path = Path(
                 self.cfg.train.save_path,
@@ -378,11 +377,11 @@ class Train:
             self.logger().warning(f'label: {data.y.tolist()}, predict: {predict.tolist()}')
 
             true_perm = (data.y == 1)
-            score1_temp_true = score_uni[true_perm].view(-1).detach().cpu()
+            score1_temp_true = score_uni[true_perm].detach().cpu()
             score1_mean_true = torch.concatenate((score1_mean_true, score1_temp_true), dim=0)
 
             false_perm = (data.y == 0)
-            score1_temp_false = score_uni[false_perm].view(-1).detach().cpu()
+            score1_temp_false = score_uni[false_perm].detach().cpu()
             score1_mean_false = torch.concatenate((score1_mean_false, score1_temp_false), dim=0)
 
         score1_mean_true = torch.mean(score1_mean_true, dim=0, keepdim=False)
@@ -402,7 +401,7 @@ class Train:
 
         if self.cfg.train.load_model:
             self.build_model()
-            run_wandb = self.createWandbRun(self.group, 'test')
+            run_wandb = self.createWandbRun('test')
             for fold in range(self.folds - 1):
                 model_path = Path(self.cfg.train.save_path, 'fold-' + str(fold) + '.pth')
                 if model_path.exists():
@@ -412,7 +411,7 @@ class Train:
                     acc_test_best = self.test_specific_model(fold, acc_test_best)
             run_wandb.finish()
         else:
-            run_wandb = self.createWandbRun(self.group, 'test')
+            run_wandb = self.createWandbRun('test')
             for model_best in self.model_best_list:
                 self.model.load_state_dict(model_best[1])
                 fold = model_best[0]
@@ -440,7 +439,7 @@ class Train:
         self.logger().warning(f'Test Loss: {loss}')
         self.logger().warning(f'Last Time: {util.Timer.to_datetime(self.timer.last())}')
 
-        run_wandb = self.createWandbRun(self.group, 'test', fold=1)
+        run_wandb = self.createWandbRun('test', fold=1)
         util.draw_atlas_interpret(
             self.atlas_table, community_factor,
             score_uni_true, score_uni_false,
@@ -448,10 +447,10 @@ class Train:
         )
         run_wandb.finish()
 
-    def createWandbRun(self, group: str, job_type: str, fold: int = 0):
+    def createWandbRun(self, job_type: str, fold: int = 0):
         cfg = self.cfg
-        group = f'{group}-{self.group_id}'
-        name = f'{group}-{job_type}-{fold}'
+        group = f'{self.cfg.dataset.atlas_table_type}-{self.group_id}'
+        name = f'{self.group}-{job_type}-{fold}'
         run = wandb.init(
             project=cfg.project,
             entity=cfg.entity,

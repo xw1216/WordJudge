@@ -66,6 +66,5 @@ class TopKPool(gnn.TopKPooling):
         # select remaining edge
         edge_index, edge_attr = filter_adj(edge_index, edge_attr, perm, num_nodes=score.size(0))
 
-        # TODO choose score index and check score loss chain
         return PoolSelector(x_out, edge_index, edge_attr, batch[perm], pos[perm], score, score_norm)
         # return PoolSelector(x, edge_index, edge_attr, batch[perm], pos[perm], score[perm])

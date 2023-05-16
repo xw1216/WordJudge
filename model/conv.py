@@ -86,7 +86,6 @@ class GConv(gnn.MessagePassing):
     ) -> Tensor:
         # send message from neighbor node j that belongs to Neighbor(i) to central node i
 
-        # TODO choose message function
         # edge weight normalize
         # shape = (edge_num, 1)
         # 1. e_ij = e_ij / sum_{j in Neighbor(i)}(abs(e_ij))
