@@ -9,7 +9,7 @@ defaults:
 
 project: 'WordJudge'
 entity: 'outspace'
-group: 'RRC_wRRC_'
+group: 'RRC_wRRC_no_noise'
 
 cuda: True
 
