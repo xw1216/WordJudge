@@ -17,4 +17,5 @@ lamb_consist: 0.5
 
 dim_conv1: 8
 dim_conv2: 4
+dim_conv3: 4
 dim_mlp: 32

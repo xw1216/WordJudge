@@ -9,8 +9,10 @@ class LossSelector:
         self.loss_ce: Tensor = torch.Tensor()
         self.loss_unit1: Tensor = torch.Tensor()
         self.loss_unit2: Tensor = torch.Tensor()
+        self.loss_unit3: Tensor = torch.Tensor()
         self.loss_top1: Tensor = torch.Tensor()
         self.loss_top2: Tensor = torch.Tensor()
+        self.loss_top3: Tensor = torch.Tensor()
         self.loss_consist: Tensor = torch.Tensor()
 
     def to_num(self):
@@ -18,8 +20,10 @@ class LossSelector:
         self.loss_ce = self.loss_ce.cpu().item()
         self.loss_unit1 = self.loss_unit1.cpu().item()
         self.loss_unit2 = self.loss_unit2.cpu().item()
+        self.loss_unit3 = self.loss_unit3.cpu().item()
         self.loss_top1 = self.loss_top1.cpu().item()
         self.loss_top2 = self.loss_top2.cpu().item()
+        self.loss_top3 = self.loss_top3.cpu().item()
         self.loss_consist = self.loss_consist.cpu().item()
 
 

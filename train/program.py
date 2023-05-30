@@ -95,6 +95,7 @@ class Train:
             drop_ratio=self.cfg.model.drop_ratio,
             dim_conv1=self.cfg.model.dim_conv1,
             dim_conv2=self.cfg.model.dim_conv2,
+            dim_conv3=self.cfg.model.dim_conv3,
             dim_mlp=self.cfg.model.dim_mlp
         ).to(self.device)
 
@@ -138,6 +139,7 @@ class Train:
 
         res.loss_unit1 = model.unit_loss(weights[0])
         res.loss_unit2 = model.unit_loss(weights[1])
+        res.loss_unit3 = model.unit_loss(weights[2])
 
         res.loss_top1 = model.top_k_loss(
             scores[0], self.cfg.model.pool_ratio, self.cfg.model.eps
@@ -145,14 +147,17 @@ class Train:
         res.loss_top2 = model.top_k_loss(
             scores[1], self.cfg.model.pool_ratio, self.cfg.model.eps
         )
+        res.loss_top3 = model.top_k_loss(
+            scores[2], self.cfg.model.pool_ratio, self.cfg.model.eps
+        )
 
         res.loss_consist = model.consist_loss(
             scores[0], labels, self.cfg.dataset.n_class, self.device
         )
 
         res.loss_all = res.loss_ce + (
-                res.loss_unit1 + res.loss_unit2) + (
-                res.loss_top1 + res.loss_top2) * self.cfg.model.lamb_top + (
+                res.loss_unit1 + res.loss_unit2 + res.loss_unit3) + (
+                res.loss_top1 + res.loss_top2 + res.loss_top3) * self.cfg.model.lamb_top + (
                 res.loss_consist) * self.cfg.model.lamb_consist
 
         return res
@@ -449,7 +454,8 @@ class Train:
 
     def createWandbRun(self, job_type: str, fold: int = 0):
         cfg = self.cfg
-        group = f'{self.cfg.dataset.atlas_table_type}-{self.group_id}'
+        # group = f'{self.cfg.dataset.atlas_table_type}-{self.group_id}'
+        group = f'{self.cfg.dataset.atlas_table_type}-3-Conv'
         name = f'{self.group}-{job_type}-{fold}'
         run = wandb.init(
             project=cfg.project,
