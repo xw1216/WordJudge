@@ -9,7 +9,7 @@ defaults:
 
 project: 'WordJudge'
 entity: 'outspace'
-group: 'RRC_wRRC_random'
+group: 'RRC_wRRC_'
 
 cuda: True
 

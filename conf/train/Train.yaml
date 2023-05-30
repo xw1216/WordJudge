@@ -5,8 +5,8 @@ seed: 255
 batch_size: 18
 epochs: 200
 
-folds: 20
-stratified: False
+folds: 10
+stratified: True
 
 load_model: False
 save_model: True
