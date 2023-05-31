@@ -200,10 +200,8 @@ class Train:
                     "train/loss_avg": loss.loss_all,
                     "train/loss_unit1": loss.loss_unit[0],
                     "train/loss_unit2": loss.loss_unit[1],
-                    "train/loss_unit_all": loss.loss_unit,
                     "train/loss_top1": loss.loss_top[0],
                     "train/loss_top2": loss.loss_top[1],
-                    "train/loss_top_all": loss.loss_top,
                     "train/loss_consist": loss.loss_consist,
                 }
                 wandb.log(log_dict)
@@ -235,10 +233,8 @@ class Train:
                         "epoch/valid_loss_avg": loss.loss_all,
                         "epoch/valid_loss_unit1": loss.loss_unit[0],
                         "epoch/valid_loss_unit2": loss.loss_unit[1],
-                        "epoch/valid_loss_unit_all": loss.loss_unit,
-                        "epoch/valid_loss_top1": loss.loss_top[1],
-                        "epoch/valid_loss_top2": loss.loss_top[2],
-                        "epoch/valid_loss_top_all": loss.loss_top,
+                        "epoch/valid_loss_top1": loss.loss_top[0],
+                        "epoch/valid_loss_top2": loss.loss_top[1],
                         "epoch/valid_loss_consist": loss.loss_consist,
                     }
                     wandb.log(log_dict)
