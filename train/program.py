@@ -96,6 +96,7 @@ class Train:
             dim_conv1=self.cfg.model.dim_conv1,
             dim_conv2=self.cfg.model.dim_conv2,
             dim_conv3=self.cfg.model.dim_conv3,
+            dim_conv4=self.cfg.model.dim_conv4,
             dim_mlp=self.cfg.model.dim_mlp
         ).to(self.device)
 
@@ -140,6 +141,7 @@ class Train:
         res.loss_unit1 = model.unit_loss(weights[0])
         res.loss_unit2 = model.unit_loss(weights[1])
         res.loss_unit3 = model.unit_loss(weights[2])
+        res.loss_unit4 = model.unit_loss(weights[3])
 
         res.loss_top1 = model.top_k_loss(
             scores[0], self.cfg.model.pool_ratio, self.cfg.model.eps

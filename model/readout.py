@@ -13,7 +13,8 @@ class ReadOut(torch.nn.Module):
             self,
             x_1: Tensor, batch_1: Tensor,
             x_2: Tensor, batch_2: Tensor,
-            x_3: Tensor, batch_3: Tensor
+            x_3: Tensor, batch_3: Tensor,
+            x_4: Tensor, batch_4: Tensor
     ):
         read_1 = torch.cat((
             gnn.global_mean_pool(x_1, batch_1),
@@ -30,7 +31,12 @@ class ReadOut(torch.nn.Module):
             gnn.global_max_pool(x_3, batch_3)
         ), dim=1)
 
-        return torch.cat((read_1, read_2, read_3), dim=1)
+        read_4 = torch.cat((
+            gnn.global_mean_pool(x_4, batch_4),
+            gnn.global_max_pool(x_4, batch_4)
+        ), dim=1)
+
+        return torch.cat((read_1, read_2, read_3, read_4), dim=1)
 
     def __repr__(self):
         return f'{self.__class__.__name__}(mean || max)'

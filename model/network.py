@@ -13,7 +13,9 @@ class BrainGNN(torch.nn.Module):
     def __init__(
             self, dim_in: int, num_class: int, num_cluster: int,
             pool_ratio: float, drop_ratio: float,
-            dim_conv1: int, dim_conv2: int, dim_conv3: int, dim_mlp: int
+            dim_conv1: int, dim_conv2: int,
+            dim_conv3: int, dim_conv4: int,
+            dim_mlp: int
     ):
         super().__init__()
 
@@ -26,7 +28,8 @@ class BrainGNN(torch.nn.Module):
         self.dim1 = dim_conv1
         self.dim2 = dim_conv2
         self.dim3 = dim_conv3
-        self.dim4 = dim_mlp
+        self.dim4 = dim_conv4
+        self.dim5 = dim_mlp
         self.dim_out = num_class
 
         self.conv1 = GConv(
@@ -66,24 +69,38 @@ class BrainGNN(torch.nn.Module):
             nonlinearity=nn.Sigmoid()
         )
 
+        self.conv4 = GConv(
+            in_channel=self.dim3,
+            out_channel=self.dim4,
+            num_cluster=self.num_cluster,
+            num_roi=self.num_roi
+        )
+        self.pool4 = TopKPool(
+            in_channels=self.dim4,
+            ratio=self.pool_ratio,
+            multiplier=1,
+            nonlinearity=nn.Sigmoid()
+        )
+
         self.readout = ReadOut()
 
         self.mlp1 = nn.Sequential(
-            nn.Linear((self.dim1 + self.dim2 + self.dim3) * 2, self.dim3, bias=True),
+            nn.Linear(
+                (self.dim1 + self.dim2 + self.dim3 + self.dim4) * 2, self.dim5, bias=True),
             nn.PReLU(),
-            nn.BatchNorm1d(self.dim3),
+            nn.BatchNorm1d(self.dim5),
             nn.Dropout(p=self.drop_ratio)
         )
 
         self.mlp2 = nn.Sequential(
-            nn.Linear(self.dim3, self.dim4, bias=True),
+            nn.Linear(self.dim5, self.dim5, bias=True),
             nn.PReLU(),
-            nn.BatchNorm1d(self.dim4),
+            nn.BatchNorm1d(self.dim5),
             nn.Dropout(p=self.drop_ratio)
         )
 
         self.mlp3 = nn.Sequential(
-            nn.Linear(self.dim4, self.dim_out),
+            nn.Linear(self.dim5, self.dim_out),
             nn.LogSoftmax(dim=-1)
         )
 
@@ -101,7 +118,15 @@ class BrainGNN(torch.nn.Module):
         h3 = self.conv3(res2.x, res2.edge_index, res2.edge_attr, res2.pos)
         res3: PoolSelector = self.pool3(h3, res2.edge_index, res2.edge_attr, res2.batch, res2.pos)
 
-        x = self.readout(res1.x, res1.batch, res2.x, res2.batch, res3.x, res3.batch)
+        h4 = self.conv4(res3.x, res3.edge_index, res3.edge_attr, res3.pos)
+        res4: PoolSelector = self.pool3(h4, res3.edge_index, res3.edge_attr, res3.batch, res3.pos)
+
+        x = self.readout(
+            res1.x, res1.batch,
+            res2.x, res2.batch,
+            res3.x, res3.batch,
+            res4.x, res4.batch
+        )
 
         x1 = self.mlp1(x)
         x2 = self.mlp2(x1)
@@ -110,13 +135,14 @@ class BrainGNN(torch.nn.Module):
         score1 = res1.score_norm.view(x_out.size(0), -1)
         score2 = res2.score_norm.view(x_out.size(0), -1)
         score3 = res3.score_norm.view(x_out.size(0), -1)
+        score4 = res4.score_norm.view(x_out.size(0), -1)
         score1_uni = res1.score.view(x_out.size(0), -1)
 
         # x_out = torch.nn.functional.softmax(x3, dim=-1)
 
         return x_out, \
-            [self.pool1.weight, self.pool2.weight, self.pool3.weight], \
-            [score1, score2, score3], \
+            [self.pool1.weight, self.pool2.weight, self.pool3.weight, self.pool4.weight], \
+            [score1, score2, score3, score4], \
             score1_uni
 
     @classmethod
