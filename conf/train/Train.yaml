@@ -3,7 +3,7 @@
 seed: 255
 
 batch_size: 18
-epochs: 200
+epochs: 150
 
 folds: 20
 stratified: True

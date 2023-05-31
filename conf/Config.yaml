@@ -7,7 +7,7 @@ defaults:
   - train: Train
   - log: Log
 
-project: 'WordJudge'
+project: 'WordJudge_test'
 entity: 'outspace'
 group: 'RRC_wRRC_4_conv'
 

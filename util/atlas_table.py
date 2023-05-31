@@ -79,7 +79,7 @@ def draw_community_heatmap(atlas_table: list, community_factor: Tensor, save_pat
     v_max = np.max(factor_np)
     norm = colors.Normalize(vmin=v_min, vmax=v_max)
 
-    fig = plt.figure(figsize=(8, 1.8 * rows), dpi=300)
+    fig = plt.figure(figsize=(8, 0.9 * cluster_num * rows), dpi=300)
     plt.axis('off')
     plt.title('Membership score of ROI to community', fontsize=16)
     plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=None, hspace=0.5)

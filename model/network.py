@@ -13,9 +13,7 @@ class BrainGNN(torch.nn.Module):
     def __init__(
             self, dim_in: int, num_class: int, num_cluster: int,
             pool_ratio: float, drop_ratio: float,
-            dim_conv1: int, dim_conv2: int,
-            dim_conv3: int, dim_conv4: int,
-            dim_mlp: int
+            dim_conv: list[int], dim_mlp: int
     ):
         super().__init__()
 
@@ -25,125 +23,84 @@ class BrainGNN(torch.nn.Module):
         self.drop_ratio = drop_ratio
 
         self.dim_in = dim_in
-        self.dim1 = dim_conv1
-        self.dim2 = dim_conv2
-        self.dim3 = dim_conv3
-        self.dim4 = dim_conv4
-        self.dim5 = dim_mlp
+        self.dim_conv = dim_conv
+        self.dim_mlp = dim_mlp
         self.dim_out = num_class
+        self.conv_len = len(dim_conv)
 
-        self.conv1 = GConv(
-            in_channel=self.dim_in,
-            out_channel=self.dim1,
-            num_cluster=self.num_cluster,
-            num_roi=self.num_roi
-        )
-        self.pool1 = TopKPool(
-            in_channels=self.dim1,
-            ratio=self.pool_ratio,
-            multiplier=1,
-            nonlinearity=nn.Sigmoid()
-        )
-        self.conv2 = GConv(
-            in_channel=self.dim1,
-            out_channel=self.dim2,
-            num_cluster=self.num_cluster,
-            num_roi=self.num_roi
-        )
-        self.pool2 = TopKPool(
-            in_channels=self.dim2,
-            ratio=self.pool_ratio,
-            multiplier=1,
-            nonlinearity=nn.Sigmoid()
-        )
-        self.conv3 = GConv(
-            in_channel=self.dim2,
-            out_channel=self.dim3,
-            num_cluster=self.num_cluster,
-            num_roi=self.num_roi
-        )
-        self.pool3 = TopKPool(
-            in_channels=self.dim3,
-            ratio=self.pool_ratio,
-            multiplier=1,
-            nonlinearity=nn.Sigmoid()
-        )
+        self.conv: nn.ModuleList = nn.ModuleList()
+        self.pool: nn.ModuleList = nn.ModuleList()
 
-        self.conv4 = GConv(
-            in_channel=self.dim3,
-            out_channel=self.dim4,
-            num_cluster=self.num_cluster,
-            num_roi=self.num_roi
-        )
-        self.pool4 = TopKPool(
-            in_channels=self.dim4,
-            ratio=self.pool_ratio,
-            multiplier=1,
-            nonlinearity=nn.Sigmoid()
-        )
+        for i in range(self.conv_len):
+            conv_in_channel = self.dim_conv[i-1] if i > 0 else self.dim_in
+            self.conv.append(
+                GConv(
+                    in_channel=conv_in_channel,
+                    out_channel=self.dim_conv[i],
+                    num_cluster=self.num_cluster,
+                    num_roi=self.num_roi
+                )
+            )
+            self.pool.append(
+                TopKPool(
+                    in_channels=self.dim_conv[i],
+                    ratio=self.pool_ratio,
+                    multiplier=1,
+                    nonlinearity=nn.Sigmoid()
+                )
+            )
 
-        self.readout = ReadOut()
+        self.readout = ReadOut(self.conv_len)
+
+        mlp_sum_dim = 0
+        for dim in self.dim_conv:
+            mlp_sum_dim += dim
 
         self.mlp1 = nn.Sequential(
-            nn.Linear(
-                (self.dim1 + self.dim2 + self.dim3 + self.dim4) * 2, self.dim5, bias=True),
+            nn.Linear(mlp_sum_dim * 2, self.dim_mlp, bias=True),
             nn.PReLU(),
-            nn.BatchNorm1d(self.dim5),
+            nn.BatchNorm1d(self.dim_mlp),
             nn.Dropout(p=self.drop_ratio)
         )
 
         self.mlp2 = nn.Sequential(
-            nn.Linear(self.dim5, self.dim5, bias=True),
+            nn.Linear(self.dim_mlp, self.dim_mlp, bias=True),
             nn.PReLU(),
-            nn.BatchNorm1d(self.dim5),
+            nn.BatchNorm1d(self.dim_mlp),
             nn.Dropout(p=self.drop_ratio)
         )
 
         self.mlp3 = nn.Sequential(
-            nn.Linear(self.dim5, self.dim_out),
+            nn.Linear(self.dim_mlp, self.dim_out),
             nn.LogSoftmax(dim=-1)
         )
 
     def forward(self, data):
-        h1 = self.conv1(data.x, data.edge_index, data.edge_attr, data.pos)
-        res1: PoolSelector = self.pool1(h1, data.edge_index, data.edge_attr, data.batch, data.pos)
+        res_list: list[PoolSelector] = []
+        for i in range(self.conv_len):
+            feed = res_list[i-1] if i > 0 else data
+            graph = self.conv[i](feed.x, feed.edge_index, feed.edge_attr, feed.pos)
+            res = self.pool[i](graph, feed.edge_index, feed.edge_attr, feed.batch, feed.pos)
+            res_list.append(res)
 
-        # res1.edge_index, res1.edge_attr = BrainGNN.augment_adj_mat(
-        #     res1.edge_index, res1.edge_attr.squeeze(), res1.x.size(0)
-        # )
-
-        h2 = self.conv2(res1.x, res1.edge_index, res1.edge_attr, res1.pos)
-        res2: PoolSelector = self.pool2(h2, res1.edge_index, res1.edge_attr, res1.batch, res1.pos)
-
-        h3 = self.conv3(res2.x, res2.edge_index, res2.edge_attr, res2.pos)
-        res3: PoolSelector = self.pool3(h3, res2.edge_index, res2.edge_attr, res2.batch, res2.pos)
-
-        h4 = self.conv4(res3.x, res3.edge_index, res3.edge_attr, res3.pos)
-        res4: PoolSelector = self.pool3(h4, res3.edge_index, res3.edge_attr, res3.batch, res3.pos)
-
-        x = self.readout(
-            res1.x, res1.batch,
-            res2.x, res2.batch,
-            res3.x, res3.batch,
-            res4.x, res4.batch
-        )
+        x = self.readout(res_list)
 
         x1 = self.mlp1(x)
         x2 = self.mlp2(x1)
         x_out = self.mlp3(x2)
 
-        score1 = res1.score_norm.view(x_out.size(0), -1)
-        score2 = res2.score_norm.view(x_out.size(0), -1)
-        score3 = res3.score_norm.view(x_out.size(0), -1)
-        score4 = res4.score_norm.view(x_out.size(0), -1)
-        score1_uni = res1.score.view(x_out.size(0), -1)
+        weight_list = []
+        for i in range(self.conv_len):
+            weight_list.append(self.pool[i].weight)
 
-        # x_out = torch.nn.functional.softmax(x3, dim=-1)
+        score_norm_list = []
+        for i in range(self.conv_len):
+            score_norm_list.append(
+                res_list[i].score_norm.view(x_out.size(0), -1)
+            )
+        score1_uni = res_list[0].score.view(x_out.size(0), -1)
 
-        return x_out, \
-            [self.pool1.weight, self.pool2.weight, self.pool3.weight, self.pool4.weight], \
-            [score1, score2, score3, score4], \
-            score1_uni
+        return x_out, weight_list, score_norm_list, score1_uni
 
     @classmethod
     def augment_adj_mat(cls, edge_index, edge_weight, num_nodes):

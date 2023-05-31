@@ -4,35 +4,27 @@ from torch import Tensor
 
 
 class LossSelector:
-    def __init__(self):
+    def __init__(self, conv_len: int):
+        self.conv_len = conv_len
         self.loss_all: Tensor = torch.Tensor()
         self.loss_ce: Tensor = torch.Tensor()
-        self.loss_unit1: Tensor = torch.Tensor()
-        self.loss_unit2: Tensor = torch.Tensor()
-        self.loss_unit3: Tensor = torch.Tensor()
-        self.loss_unit4: Tensor = torch.Tensor()
-        self.loss_top1: Tensor = torch.Tensor()
-        self.loss_top2: Tensor = torch.Tensor()
-        self.loss_top3: Tensor = torch.Tensor()
-        self.loss_top4: Tensor = torch.Tensor()
         self.loss_consist: Tensor = torch.Tensor()
+
+        self.loss_unit: list[Tensor] = []
+        self.loss_top: list[Tensor] = []
+
+        for i in range(self.conv_len):
+            self.loss_unit.append(torch.Tensor())
+            self.loss_top.append(torch.Tensor())
 
     def to_num(self):
         self.loss_all = self.loss_all.cpu().item()
-
         self.loss_ce = self.loss_ce.cpu().item()
-
-        self.loss_unit1 = self.loss_unit1.cpu().item()
-        self.loss_unit2 = self.loss_unit2.cpu().item()
-        self.loss_unit3 = self.loss_unit3.cpu().item()
-        self.loss_unit4 = self.loss_unit4.cpu().item()
-
-        self.loss_top1 = self.loss_top1.cpu().item()
-        self.loss_top2 = self.loss_top2.cpu().item()
-        self.loss_top3 = self.loss_top3.cpu().item()
-        self.loss_top4 = self.loss_top4.cpu().item()
-
         self.loss_consist = self.loss_consist.cpu().item()
+
+        for i in range(self.conv_len):
+            self.loss_unit[i] = self.loss_unit[i].cpu().item()
+            self.loss_top[i] = self.loss_top[i].cpu().item()
 
 
 def top_k_loss(score: Tensor, pool_ratio: float, eps: float = 1e-10) -> Tensor:

@@ -93,10 +93,7 @@ class Train:
             num_cluster=self.cfg.model.n_cluster,
             pool_ratio=self.cfg.model.pool_ratio,
             drop_ratio=self.cfg.model.drop_ratio,
-            dim_conv1=self.cfg.model.dim_conv1,
-            dim_conv2=self.cfg.model.dim_conv2,
-            dim_conv3=self.cfg.model.dim_conv3,
-            dim_conv4=self.cfg.model.dim_conv4,
+            dim_conv=self.cfg.model.dim_conv,
             dim_mlp=self.cfg.model.dim_mlp
         ).to(self.device)
 
@@ -134,33 +131,32 @@ class Train:
             output: torch.Tensor, labels: torch.Tensor,
             weights: torch.Tensor, scores: torch.Tensor
     ) -> model.LossSelector:
-        res = model.LossSelector()
+        conv_len = len(weights)
+
+        res = model.LossSelector(conv_len)
 
         res.loss_ce = model.cross_entropy_loss(output, labels)
-
-        res.loss_unit1 = model.unit_loss(weights[0])
-        res.loss_unit2 = model.unit_loss(weights[1])
-        res.loss_unit3 = model.unit_loss(weights[2])
-        res.loss_unit4 = model.unit_loss(weights[3])
-
-        res.loss_top1 = model.top_k_loss(
-            scores[0], self.cfg.model.pool_ratio, self.cfg.model.eps
-        )
-        res.loss_top2 = model.top_k_loss(
-            scores[1], self.cfg.model.pool_ratio, self.cfg.model.eps
-        )
-        res.loss_top3 = model.top_k_loss(
-            scores[2], self.cfg.model.pool_ratio, self.cfg.model.eps
-        )
-
         res.loss_consist = model.consist_loss(
             scores[0], labels, self.cfg.dataset.n_class, self.device
         )
 
-        res.loss_all = res.loss_ce + (
-                res.loss_unit1 + res.loss_unit2 + res.loss_unit3) + (
-                res.loss_top1 + res.loss_top2 + res.loss_top3) * self.cfg.model.lamb_top + (
-                res.loss_consist) * self.cfg.model.lamb_consist
+        for i in range(conv_len):
+            res.loss_unit[i] = model.unit_loss(weights[i])
+            res.loss_top[i] = model.top_k_loss(
+                scores[i], self.cfg.model.pool_ratio, self.cfg.model.eps
+            )
+
+        loss_unit = res.loss_unit[0]
+        loss_top = res.loss_top[0]
+        for i in range(1, conv_len):
+            loss_unit = loss_unit + res.loss_unit[i]
+            loss_top = loss_top + res.loss_top[i]
+
+        res.loss_all = \
+            res.loss_ce + \
+            loss_unit + \
+            loss_top * self.cfg.model.lamb_top + \
+            res.loss_consist * self.cfg.model.lamb_consist
 
         return res
 
@@ -202,15 +198,13 @@ class Train:
                     "train/step": epoch * loader.__len__() + step,
                     "train/loss_ce": loss.loss_ce,
                     "train/loss_avg": loss.loss_all,
-                    "train/loss_unit1": loss.loss_unit1,
-                    "train/loss_unit2": loss.loss_unit2,
-                    "train/loss_top1": loss.loss_top1,
-                    "train/loss_top2": loss.loss_top2,
+                    "train/loss_unit1": loss.loss_unit[0],
+                    "train/loss_unit2": loss.loss_unit[1],
+                    "train/loss_unit_all": loss.loss_unit,
+                    "train/loss_top1": loss.loss_top[0],
+                    "train/loss_top2": loss.loss_top[1],
+                    "train/loss_top_all": loss.loss_top,
                     "train/loss_consist": loss.loss_consist,
-                    # "train/pool_weight_1": torch.from_numpy(weight1_list[-1]),
-                    # "train/pool_weight_2": torch.from_numpy(weight2_list[-1]),
-                    # "train/top_k_score_1": torch.from_numpy(score1_list[-1]),
-                    # "train/top_k_score_2": torch.from_numpy(score2_list[-1])
                 }
                 wandb.log(log_dict)
 
@@ -239,10 +233,12 @@ class Train:
                         "epoch/step": epoch,
                         "epoch/valid_loss_ce": loss.loss_ce,
                         "epoch/valid_loss_avg": loss.loss_all,
-                        "epoch/valid_loss_unit1": loss.loss_unit1,
-                        "epoch/valid_loss_unit2": loss.loss_unit2,
-                        "epoch/valid_loss_top1": loss.loss_top1,
-                        "epoch/valid_loss_top2": loss.loss_top2,
+                        "epoch/valid_loss_unit1": loss.loss_unit[0],
+                        "epoch/valid_loss_unit2": loss.loss_unit[1],
+                        "epoch/valid_loss_unit_all": loss.loss_unit,
+                        "epoch/valid_loss_top1": loss.loss_top[1],
+                        "epoch/valid_loss_top2": loss.loss_top[2],
+                        "epoch/valid_loss_top_all": loss.loss_top,
                         "epoch/valid_loss_consist": loss.loss_consist,
                     }
                     wandb.log(log_dict)
@@ -337,12 +333,12 @@ class Train:
             self.acc_valid_best = 0.50
             run_wandb.finish()
 
-    def test_specific_model(self, fold: int, acc_test_best: float):
+    def test_specific_model(self, fold: int, acc_best: float):
         loss_test = self.valid_loss(0, self.final_loader, is_final=True)
         acc_test = self.valid_acc(self.final_loader, True)
 
-        if acc_test > acc_test_best:
-            acc_test_best = acc_test
+        if acc_test > acc_best:
+            acc_best = acc_test
             self.logger().info('Saving best model on final test set')
             save_path = Path(
                 self.cfg.train.save_path,
@@ -362,7 +358,7 @@ class Train:
             "test/acc_test": acc_test,
         })
 
-        return acc_test_best
+        return acc_best, acc_test
 
     def final_test_interpret(self, loader: DataLoader):
         self.model.eval()
@@ -395,7 +391,7 @@ class Train:
         score1_mean_false = torch.mean(score1_mean_false, dim=0, keepdim=False)
         acc = correct_sum / num_graph_all
         loss_avg = loss_sum / num_graph_all
-        community_factor: torch.Tensor = self.model.conv1.embed_linear[0].weight.detach().cpu()
+        community_factor: torch.Tensor = self.model.conv[0].embed_linear[0].weight.detach().cpu()
 
         self.logger().info(f'community_factor: {community_factor}')
         self.logger().info(f'score_true: {score1_mean_true}')
@@ -404,8 +400,10 @@ class Train:
         return acc, loss_avg, community_factor, score1_mean_true, score1_mean_false
 
     def test(self):
-        acc_test_best = .0
+        acc_best = .0
+        acc_list = []
 
+        # load model for each fold from saved files
         if self.cfg.train.load_model:
             self.build_model()
             run_wandb = self.createWandbRun('test')
@@ -415,15 +413,18 @@ class Train:
                     model_dict = torch.load(model_path)
                     self.model.load_state_dict(model_dict)
                     self.model.eval()
-                    acc_test_best = self.test_specific_model(fold, acc_test_best)
+                    acc_best, acc = self.test_specific_model(fold, acc_best)
+                    acc_list.append(acc)
             run_wandb.finish()
+        # load model from current training result
         else:
             run_wandb = self.createWandbRun('test')
             for model_best in self.model_best_list:
                 self.model.load_state_dict(model_best[1])
                 fold = model_best[0]
                 self.model.eval()
-                acc_test_best = self.test_specific_model(fold, acc_test_best)
+                acc_best, acc = self.test_specific_model(fold, acc_best)
+                acc_list.append(acc)
             run_wandb.finish()
 
         save_path = Path(
@@ -436,14 +437,20 @@ class Train:
             best_model_dict = torch.load(save_path)
             self.model.load_state_dict(best_model_dict)
 
-        acc, loss, community_factor, \
+        acc_final, loss_final, community_factor, \
             score_uni_true, score_uni_false = self.final_test_interpret(self.final_loader)
 
         self.timer.end()
 
+        acc_mean = 0
+        for acc in acc_list:
+            acc_mean += acc
+        acc_mean /= len(acc_list)
+
         self.logger().warning('***** Final Result *****')
-        self.logger().warning(f'Test Acc: {acc}')
-        self.logger().warning(f'Test Loss: {loss}')
+        self.logger().warning(f'Average Acc: {acc_mean}')
+        self.logger().warning(f'Final Acc: {acc_final}')
+        self.logger().warning(f'Final Loss: {loss_final}')
         self.logger().warning(f'Last Time: {util.Timer.to_datetime(self.timer.last())}')
 
         run_wandb = self.createWandbRun('test', fold=1)
@@ -456,8 +463,7 @@ class Train:
 
     def createWandbRun(self, job_type: str, fold: int = 0):
         cfg = self.cfg
-        # group = f'{self.cfg.dataset.atlas_table_type}-{self.group_id}'
-        group = f'{self.cfg.dataset.atlas_table_type}-3-Conv'
+        group = f'{self.cfg.dataset.atlas_table_type}-{self.group_id}'
         name = f'{self.group}-{job_type}-{fold}'
         run = wandb.init(
             project=cfg.project,
@@ -481,8 +487,9 @@ class Train:
                 "lambda_subject": cfg.model.lamb_top,
                 "lambda_group": cfg.model.lamb_consist,
 
-                "dim_conv1": cfg.model.dim_conv1,
-                "dim_conv2": cfg.model.dim_conv2,
+                "dim_conv1": cfg.model.dim_conv[0],
+                "dim_conv2": cfg.model.dim_conv[1],
+                "dim_conv": cfg.model.dim_conv,
                 "dim-mlp": cfg.model.dim_mlp,
 
                 "seed": cfg.train.seed,
