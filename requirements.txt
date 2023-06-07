@@ -1,6 +1,6 @@
-torch==2.0.0
-torchvision==0.15.0
-torchaudio==2.0.0
+torch~=2.0.1
+torchvision~=0.15.0
+torchaudio~=2.0.0
 
 pyg_lib~=0.2.0
 torch_geometric~=2.3.0
